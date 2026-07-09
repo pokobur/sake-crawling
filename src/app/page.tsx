@@ -1,10 +1,14 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Filter, Calendar as CalendarIcon, List, AlertTriangle, RefreshCw, Beer, MapPin } from 'lucide-react';
+import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
+import { Filter, Calendar as CalendarIcon, List, AlertTriangle, RefreshCw, Beer, MapPin, Map, Heart } from 'lucide-react';
 import FilterSidebar, { GenreType, AreaType } from '../components/filter-sidebar';
 import CalendarView, { Event } from '../components/calendar-view';
 import EventDetail from '../components/event-detail';
+import { useFavorites } from '../hooks/use-favorites';
+
+// MapView は Leaflet を含むため SSR を回避して動的インポート
+const MapView = lazy(() => import('../components/map-view'));
 
 export default function Home() {
   // 状態管理
@@ -18,12 +22,21 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGenres, setSelectedGenres] = useState<GenreType[]>([]);
   const [selectedAreas, setSelectedAreas] = useState<AreaType[]>([]);
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   
   // 表示関連
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
-  const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
+  const [viewMode, setViewMode] = useState<'calendar' | 'list' | 'map'>('calendar');
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
+
+  // お気に入りフック
+  const { favoriteIds, toggleFavorite, isFavorite } = useFavorites();
+
+  // お気に入り中のイベント数を算出
+  const favoritesCount = useMemo(() => {
+    return events.filter(e => favoriteIds.has(e.id)).length;
+  }, [events, favoriteIds]);
 
   // データフェッチ
   const fetchEvents = async () => {
@@ -50,6 +63,11 @@ export default function Home() {
   // フィルタリング処理
   useEffect(() => {
     let result = [...events];
+
+    // 0. お気に入りフィルター
+    if (showFavoritesOnly) {
+      result = result.filter(event => isFavorite(event.id));
+    }
 
     // 1. キーワード検索
     if (searchQuery.trim() !== '') {
@@ -78,7 +96,7 @@ export default function Home() {
     }
 
     setFilteredEvents(result);
-  }, [events, searchQuery, selectedGenres, selectedAreas]);
+  }, [events, searchQuery, selectedGenres, selectedAreas, showFavoritesOnly, isFavorite]);
 
   // ジャンルごとの色定義 (リストビュー用)
   const GENRE_COLORS: { [key: string]: string } = {
@@ -89,21 +107,27 @@ export default function Home() {
     'その他': 'bg-slate-500/10 text-slate-300 border-slate-500/20'
   };
 
+  // サイドバー共通のprops
+  const sidebarProps = {
+    searchQuery,
+    setSearchQuery,
+    selectedGenres,
+    setSelectedGenres,
+    selectedAreas,
+    setSelectedAreas,
+    totalCount: events.length,
+    filteredCount: filteredEvents.length,
+    showFavoritesOnly,
+    setShowFavoritesOnly,
+    favoritesCount,
+  };
+
   return (
     <div className="flex h-screen bg-slate-950 font-sans text-slate-100 overflow-hidden relative">
       
       {/* デスクトップ用サイドバー */}
       <aside className="hidden lg:block w-80 shrink-0 h-full">
-        <FilterSidebar
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-          selectedGenres={selectedGenres}
-          setSelectedGenres={setSelectedGenres}
-          selectedAreas={selectedAreas}
-          setSelectedAreas={setSelectedAreas}
-          totalCount={events.length}
-          filteredCount={filteredEvents.length}
-        />
+        <FilterSidebar {...sidebarProps} />
       </aside>
 
       {/* モバイル用フィルタードロワー */}
@@ -112,15 +136,8 @@ export default function Home() {
           <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={() => setIsMobileFilterOpen(false)} />
           <div className="absolute left-0 top-0 h-full w-[300px] shadow-2xl animate-slide-in">
             <FilterSidebar
-              searchQuery={searchQuery}
-              setSearchQuery={setSearchQuery}
-              selectedGenres={selectedGenres}
-              setSelectedGenres={setSelectedGenres}
-              selectedAreas={selectedAreas}
-              setSelectedAreas={setSelectedAreas}
+              {...sidebarProps}
               onCloseMobile={() => setIsMobileFilterOpen(false)}
-              totalCount={events.length}
-              filteredCount={filteredEvents.length}
             />
           </div>
         </div>
@@ -178,6 +195,17 @@ export default function Home() {
                 <List className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">リスト</span>
               </button>
+              <button
+                onClick={() => setViewMode('map')}
+                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
+                  viewMode === 'map'
+                    ? 'bg-amber-400 text-slate-950 shadow-md'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Map className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">マップ</span>
+              </button>
             </div>
 
             {/* モバイル用フィルター表示ボタン */}
@@ -216,7 +244,7 @@ export default function Home() {
               </button>
             </div>
           ) : (
-            /* カレンダー or リストの切り替え描画 */
+            /* カレンダー / リスト / マップ の切り替え描画 */
             <div className="h-full">
               {viewMode === 'calendar' ? (
                 <CalendarView
@@ -225,6 +253,20 @@ export default function Home() {
                   events={filteredEvents}
                   onSelectEvent={setSelectedEvent}
                 />
+              ) : viewMode === 'map' ? (
+                <Suspense fallback={
+                  <div className="h-full flex flex-col justify-center items-center space-y-4">
+                    <RefreshCw className="w-8 h-8 text-amber-400 animate-spin" />
+                    <p className="text-sm text-slate-400 font-semibold tracking-wider">
+                      マップを準備中...
+                    </p>
+                  </div>
+                }>
+                  <MapView
+                    events={filteredEvents}
+                    onSelectEvent={setSelectedEvent}
+                  />
+                </Suspense>
               ) : (
                 /* リストビュー */
                 <div className="space-y-6">
@@ -232,19 +274,38 @@ export default function Home() {
                     <div className="py-20 text-center border border-dashed border-slate-800 rounded-2xl bg-slate-900/10">
                       <Beer className="w-10 h-10 text-slate-600 mx-auto mb-3" />
                       <p className="text-sm text-slate-500 font-semibold">
-                        条件に合致するお酒イベントが見つかりません。
+                        {showFavoritesOnly
+                          ? 'お気に入りに登録されたイベントがありません。'
+                          : '条件に合致するお酒イベントが見つかりません。'}
                       </p>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                       {filteredEvents.map((event) => {
                         const primaryGenre = event.genre[0] || 'その他';
+                        const isEventFavorite = isFavorite(event.id);
                         return (
                           <div
                             key={event.id}
                             onClick={() => setSelectedEvent(event)}
-                            className="bg-slate-900/30 backdrop-blur-md border border-slate-900 hover:border-slate-800/80 rounded-2xl p-5 hover:bg-slate-900/50 transition-all cursor-pointer group flex flex-col justify-between min-h-[190px] shadow-sm hover:shadow-lg"
+                            className="bg-slate-900/30 backdrop-blur-md border border-slate-900 hover:border-slate-800/80 rounded-2xl p-5 hover:bg-slate-900/50 transition-all cursor-pointer group flex flex-col justify-between min-h-[190px] shadow-sm hover:shadow-lg relative"
                           >
+                            {/* お気に入りハート */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleFavorite(event.id);
+                              }}
+                              className={`absolute top-4 right-4 p-1.5 rounded-lg transition-all z-10 ${
+                                isEventFavorite
+                                  ? 'text-rose-400 hover:text-rose-300'
+                                  : 'text-slate-700 hover:text-rose-400 opacity-0 group-hover:opacity-100'
+                              }`}
+                              title={isEventFavorite ? 'お気に入りを解除' : 'お気に入りに追加'}
+                            >
+                              <Heart className={`w-4 h-4 ${isEventFavorite ? 'fill-rose-400' : ''}`} />
+                            </button>
+
                             <div className="space-y-3">
                               {/* 日付とジャンルバッジ */}
                               <div className="flex justify-between items-center">
@@ -258,7 +319,7 @@ export default function Home() {
                               </div>
 
                               {/* タイトル */}
-                              <h3 className="text-md font-bold text-slate-200 group-hover:text-amber-400 transition-colors line-clamp-2 leading-snug">
+                              <h3 className="text-md font-bold text-slate-200 group-hover:text-amber-400 transition-colors line-clamp-2 leading-snug pr-8">
                                 {event.title}
                               </h3>
 
@@ -294,6 +355,8 @@ export default function Home() {
       <EventDetail
         event={selectedEvent}
         onClose={() => setSelectedEvent(null)}
+        isFavorite={selectedEvent ? isFavorite(selectedEvent.id) : false}
+        onToggleFavorite={toggleFavorite}
       />
     </div>
   );

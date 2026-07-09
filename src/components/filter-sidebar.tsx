@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Search, Calendar as CalendarIcon, MapPin, Beer, Filter, X } from 'lucide-react';
+import { Search, Calendar as CalendarIcon, MapPin, Beer, Filter, X, Heart } from 'lucide-react';
 
 export type GenreType = '日本酒' | 'ビール' | 'ウイスキー' | 'ワイン' | 'その他';
 export type AreaType = '城北' | '城東' | '城山' | '城西' | '臨海部' | 'その他東京近郊';
@@ -16,6 +16,9 @@ interface FilterSidebarProps {
   onCloseMobile?: () => void; // モバイル用ドロワーを閉じる用
   totalCount: number;
   filteredCount: number;
+  showFavoritesOnly: boolean;
+  setShowFavoritesOnly: (value: boolean) => void;
+  favoritesCount: number;
 }
 
 const GENRES: { name: GenreType; color: string; icon: string }[] = [
@@ -44,7 +47,10 @@ export default function FilterSidebar({
   setSelectedAreas,
   onCloseMobile,
   totalCount,
-  filteredCount
+  filteredCount,
+  showFavoritesOnly,
+  setShowFavoritesOnly,
+  favoritesCount
 }: FilterSidebarProps) {
 
   const handleGenreToggle = (genre: GenreType) => {
@@ -63,6 +69,7 @@ export default function FilterSidebar({
     setSearchQuery('');
     setSelectedGenres([]);
     setSelectedAreas([]);
+    setShowFavoritesOnly(false);
   };
 
   return (
@@ -100,6 +107,32 @@ export default function FilterSidebar({
             フィルターをクリア
           </button>
         )}
+      </div>
+
+      {/* お気に入りフィルター */}
+      <div className="mb-8">
+        <button
+          onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+          className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all ${
+            showFavoritesOnly
+              ? 'bg-rose-500/10 border-rose-500/30 text-rose-300 shadow-lg shadow-rose-500/5'
+              : 'bg-slate-900/50 border-slate-800 text-slate-400 hover:bg-slate-900 hover:text-slate-200'
+          }`}
+        >
+          <div className="flex items-center space-x-2">
+            <Heart className={`w-4 h-4 ${showFavoritesOnly ? 'fill-rose-400 text-rose-400' : ''}`} />
+            <span className="text-sm font-semibold">お気に入りのみ表示</span>
+          </div>
+          {favoritesCount > 0 && (
+            <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+              showFavoritesOnly
+                ? 'bg-rose-400/20 text-rose-300'
+                : 'bg-slate-800 text-slate-500'
+            }`}>
+              {favoritesCount}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* キーワード検索 */}

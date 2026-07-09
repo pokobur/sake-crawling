@@ -148,20 +148,130 @@ async function fetchBeerGirlCandidates(): Promise<{ title: string; url: string }
 }
 
 /**
+ * 3b. Let's enjoy TOKYO からビール・お酒イベント候補を取得
+ */
+async function scrapeEnjoyTokyo(): Promise<{ title: string; url: string }[]> {
+  console.log('[Scraper] Let\'s enjoy TOKYO イベント一覧の取得を開始します...');
+  const candidates: { title: string; url: string }[] = [];
+
+  try {
+    const html = await fetchWithUserAgent('https://www.enjoytokyo.jp/feature/season/beer/');
+    const $ = cheerio.load(html);
+
+    // 特集ページのイベントリンクを抽出（一般的なリスト・カード形式に対応）
+    $('a[href*="/feature/"], a[href*="/event/"], a[href*="/amuse/"]').each((_, el) => {
+      const href = $(el).attr('href');
+      const title = $(el).text().trim() || $(el).attr('title')?.trim();
+
+      if (href && title && title.length > 5) {
+        const fullUrl = href.startsWith('http') ? href : `https://www.enjoytokyo.jp${href}`;
+        // 重複排除
+        if (!candidates.some(c => c.url === fullUrl)) {
+          candidates.push({ title, url: fullUrl });
+        }
+      }
+    });
+
+    // フォールバック: 汎用的な記事リストセレクタ
+    if (candidates.length === 0) {
+      $('.featureList li a, .eventList li a, .articleList li a, .list-item a').each((_, el) => {
+        const href = $(el).attr('href');
+        const title = $(el).text().trim() || $(el).attr('title')?.trim();
+
+        if (href && title && title.length > 5) {
+          const fullUrl = href.startsWith('http') ? href : `https://www.enjoytokyo.jp${href}`;
+          if (!candidates.some(c => c.url === fullUrl)) {
+            candidates.push({ title, url: fullUrl });
+          }
+        }
+      });
+    }
+
+    console.log(`[Scraper] Let's enjoy TOKYO からイベント候補を ${candidates.length} 件抽出しました。`);
+  } catch (error) {
+    console.warn('[Scraper] ⚠️ Let\'s enjoy TOKYO の取得中にエラーが発生しました（他ソースの処理は継続します）:', error);
+  }
+
+  return candidates;
+}
+
+/**
+ * 3c. TIMEOUT Tokyo からフード＆ドリンクイベント候補を取得
+ */
+async function scrapeTimeoutTokyo(): Promise<{ title: string; url: string }[]> {
+  console.log('[Scraper] TIMEOUT Tokyo フード＆ドリンクカテゴリの取得を開始します...');
+  const candidates: { title: string; url: string }[] = [];
+
+  try {
+    const html = await fetchWithUserAgent('https://www.timeout.jp/tokyo/ja/food-drink');
+    const $ = cheerio.load(html);
+
+    // TIMEOUT Tokyo の記事カード・リスト要素からリンクを抽出
+    $('article a[href], .card a[href], .tile a[href], .article-card a[href]').each((_, el) => {
+      const href = $(el).attr('href');
+      const title = $(el).text().trim() || $(el).find('h2, h3, .title').text().trim() || $(el).attr('title')?.trim();
+
+      if (href && title && title.length > 5) {
+        const fullUrl = href.startsWith('http') ? href : `https://www.timeout.jp${href}`;
+        if (!candidates.some(c => c.url === fullUrl)) {
+          candidates.push({ title, url: fullUrl });
+        }
+      }
+    });
+
+    // フォールバック: 汎用セレクタ
+    if (candidates.length === 0) {
+      $('a[href*="/tokyo/ja/"]').each((_, el) => {
+        const href = $(el).attr('href');
+        const title = $(el).text().trim() || $(el).attr('title')?.trim();
+
+        // food-drink カテゴリトップ自体へのリンクは除外
+        if (href && title && title.length > 5 && !href.endsWith('/food-drink') && !href.endsWith('/food-drink/')) {
+          const fullUrl = href.startsWith('http') ? href : `https://www.timeout.jp${href}`;
+          if (!candidates.some(c => c.url === fullUrl)) {
+            candidates.push({ title, url: fullUrl });
+          }
+        }
+      });
+    }
+
+    console.log(`[Scraper] TIMEOUT Tokyo からイベント候補を ${candidates.length} 件抽出しました。`);
+  } catch (error) {
+    console.warn('[Scraper] ⚠️ TIMEOUT Tokyo の取得中にエラーが発生しました（他ソースの処理は継続します）:', error);
+  }
+
+  return candidates;
+}
+
+/**
  * 4. 詳細ページの本文テキストを抽出
  */
-async function fetchDetailContent(url: string, isBeerGirl: boolean): Promise<string> {
+async function fetchDetailContent(url: string, sourceType: 'prtimes' | 'beergirl' | 'enjoytokyo' | 'timeout' | 'generic'): Promise<string> {
   try {
     const html = await fetchWithUserAgent(url);
     const $ = cheerio.load(html);
 
     let text = '';
-    if (isBeerGirl) {
-      // ビール女子の本文要素
-      text = $('.post .content').text() || $('.post').text() || $('#main').text();
-    } else {
-      // PR TIMES の本文要素 (一般的なプレスリリース本文は .release-body など)
-      text = $('.release-body').text() || $('.description').text() || $('#main').text();
+    switch (sourceType) {
+      case 'beergirl':
+        // ビール女子の本文要素
+        text = $('.post .content').text() || $('.post').text() || $('#main').text();
+        break;
+      case 'prtimes':
+        // PR TIMES の本文要素 (一般的なプレスリリース本文は .release-body など)
+        text = $('.release-body').text() || $('.description').text() || $('#main').text();
+        break;
+      case 'enjoytokyo':
+        // Let's enjoy TOKYO の本文要素
+        text = $('.featureDetail').text() || $('.eventDetail').text() || $('article').text() || $('#main').text();
+        break;
+      case 'timeout':
+        // TIMEOUT Tokyo の本文要素
+        text = $('article .article-body').text() || $('article .content-body').text() || $('article').text() || $('#main').text();
+        break;
+      default:
+        text = $('article').text() || $('#main').text() || $('body').text();
+        break;
     }
 
     // 不要な空白文字の整理
@@ -306,11 +416,15 @@ async function main() {
   // 2. 候補リストの取得
   const prTimesCandidates = await fetchPRTimesCandidates();
   const beerGirlCandidates = await fetchBeerGirlCandidates();
+  const enjoyTokyoCandidates = await scrapeEnjoyTokyo();
+  const timeoutTokyoCandidates = await scrapeTimeoutTokyo();
 
   // 3. 詳細取得・構造化・保存
   const allCandidates = [
-    ...prTimesCandidates.map(c => ({ ...c, isBeerGirl: false })),
-    ...beerGirlCandidates.map(c => ({ ...c, isBeerGirl: true, description: '' }))
+    ...prTimesCandidates.map(c => ({ ...c, sourceType: 'prtimes' as const })),
+    ...beerGirlCandidates.map(c => ({ ...c, sourceType: 'beergirl' as const, description: '' })),
+    ...enjoyTokyoCandidates.map(c => ({ ...c, sourceType: 'enjoytokyo' as const, description: '' })),
+    ...timeoutTokyoCandidates.map(c => ({ ...c, sourceType: 'timeout' as const, description: '' }))
   ];
 
   // 負荷対策のため、順番に処理
@@ -327,7 +441,7 @@ async function main() {
     console.log(`[Pipeline] ソースURL: ${candidate.url}`);
 
     // 詳細ページ本文取得
-    const detailText = await fetchDetailContent(candidate.url, candidate.isBeerGirl);
+    const detailText = await fetchDetailContent(candidate.url, candidate.sourceType);
     if (!detailText) {
       console.log('⚠️ 本文が取得できなかったためスキップします。');
       continue;
@@ -337,15 +451,22 @@ async function main() {
     let eventData: EventData | null = null;
     if (IS_DRY_RUN && (!GEMINI_API_KEY || GEMINI_API_KEY.includes('your-gemini'))) {
       console.log('[LLM] [Dry Run] APIキーがないため、モックデータを生成します。');
-      // モックデータの生成
+      // ソース種別に応じたモックデータの生成
+      const mockBySource: Record<string, Partial<EventData>> = {
+        prtimes: { location_name: '池袋サンシャインシティ', address: '東京都豊島区東池袋３丁目１', genre: ['日本酒', 'その他'], area: '城北' },
+        beergirl: { location_name: '下北沢SHELTER', address: '東京都世田谷区北沢２丁目６−１０', genre: ['ビール'], area: '城西' },
+        enjoytokyo: { location_name: '恵比寿ガーデンプレイス', address: '東京都渋谷区恵比寿４丁目２０', genre: ['ビール', 'ワイン'], area: '城西' },
+        timeout: { location_name: '六本木ヒルズアリーナ', address: '東京都港区六本木６丁目１０−１', genre: ['日本酒', 'ビール'], area: '城山' },
+      };
+      const mock = mockBySource[candidate.sourceType] || mockBySource.prtimes;
       eventData = {
         title: candidate.title,
         start_date: new Date().toISOString().split('T')[0],
         end_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        location_name: candidate.isBeerGirl ? '下北沢SHELTER' : '池袋サンシャインシティ',
-        address: candidate.isBeerGirl ? '東京都世田谷区北沢２丁目６−１０' : '東京都豊島区東池袋３丁目１',
-        genre: candidate.isBeerGirl ? ['ビール'] : ['日本酒', 'その他'],
-        area: candidate.isBeerGirl ? '城西' : '城北',
+        location_name: mock.location_name!,
+        address: mock.address!,
+        genre: mock.genre! as EventData['genre'],
+        area: mock.area! as EventData['area'],
         official_url: candidate.url,
         description: `【モックデータ】${candidate.title}。お酒と音楽を同時に楽しめる夏限定のフェスティバル。`
       };
