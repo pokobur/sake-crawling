@@ -1,4 +1,5 @@
 import { Event } from '../types/event';
+import { formatLocalDate } from '../utils/date';
 
 /**
  * モック用の高品質なイベントデータ（Supabase未設定時またはエラー時のフォールバック用）
@@ -6,11 +7,11 @@ import { Event } from '../types/event';
 export function getMockEvents(): Event[] {
   const today = new Date();
 
-  // 相対日付文字列を計算するヘルパー
+  // 相対日付文字列をローカル時間基準で計算するヘルパー
   const getRelativeDateStr = (offsetDays: number) => {
     const d = new Date(today);
     d.setDate(today.getDate() + offsetDays);
-    return d.toISOString().split('T')[0];
+    return formatLocalDate(d);
   };
 
   return [

@@ -4,6 +4,7 @@ import React from 'react';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
 import { Event } from '../types/event';
 import { getGenreConfig } from '../constants/genres';
+import { formatLocalDate } from '../utils/date';
 
 // 既存コードとの後方互換性のために Event 型を再エクスポート
 export type { Event } from '../types/event';
@@ -89,15 +90,16 @@ export default function CalendarView({
 
   const calendarDays = getCalendarDays();
 
-  // 特定の日付に属するイベントを取得
+  // 特定の日付に属するイベントを取得（ローカル日付基準で正確に比較）
   const getEventsForDate = (date: Date) => {
-    const dateStr = date.toISOString().split('T')[0];
+    const dateStr = formatLocalDate(date);
     return events.filter(event => {
       return event.start_date <= dateStr && dateStr <= event.end_date;
     });
   };
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  // 今日の日付（ローカルタイム基準）
+  const todayStr = formatLocalDate(new Date());
 
   return (
     <div className="bg-slate-950/40 backdrop-blur-md rounded-2xl border border-slate-800/80 p-6 flex flex-col h-full">
@@ -153,7 +155,7 @@ export default function CalendarView({
       {/* 日付グリッド */}
       <div className="grid grid-cols-7 gap-1.5 flex-1 min-h-[450px]">
         {calendarDays.map((day) => {
-          const dateStr = day.date.toISOString().split('T')[0];
+          const dateStr = formatLocalDate(day.date);
           const isToday = dateStr === todayStr;
           const dayEvents = getEventsForDate(day.date);
           const isWeekend = day.date.getDay() === 0 || day.date.getDay() === 6;

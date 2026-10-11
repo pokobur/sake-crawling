@@ -1,6 +1,17 @@
 import { Event } from '../types/event';
 
 /**
+ * Date オブジェクトからユーザーのローカル時間基準の YYYY-MM-DD 文字列を取得
+ * toISOString() は UTC に変換されるため、日本時間(UTC+9)環境で1日前の日付になるバグを防ぐ
+ */
+export function formatLocalDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
  * YYYY-MM-DD 形式の日付文字列を「YYYY年M月D日」に変換
  */
 export function formatDate(dateStr: string): string {
@@ -52,7 +63,7 @@ export function buildGoogleCalendarUrl(
   // 終日イベントの場合、Googleカレンダー仕様として終了日は「翌日」を指定
   const endParts = event.end_date.split('-').map(Number);
   const endDateObj = new Date(endParts[0], endParts[1] - 1, endParts[2] + 1);
-  const endDateGcal = endDateObj.toISOString().split('T')[0].replace(/-/g, '');
+  const endDateGcal = formatLocalDate(endDateObj).replace(/-/g, '');
 
   const location = event.address
     ? `${event.location_name} (${event.address})`
