@@ -1,10 +1,13 @@
 'use client';
 
 import React from 'react';
-import { Search, Calendar as CalendarIcon, MapPin, Beer, Filter, X, Heart } from 'lucide-react';
+import { Search, Filter, X, Heart } from 'lucide-react';
+import { GenreType, AreaType } from '../types/event';
+import { GENRE_LIST } from '../constants/genres';
+import { AREA_LIST } from '../constants/areas';
 
-export type GenreType = '日本酒' | 'ビール' | 'ウイスキー' | 'ワイン' | 'その他';
-export type AreaType = '城北' | '城東' | '城山' | '城西' | '臨海部' | 'その他東京近郊';
+// 既存コードとの後方互換性のために型を再エクスポート
+export type { GenreType, AreaType } from '../types/event';
 
 interface FilterSidebarProps {
   searchQuery: string;
@@ -13,30 +16,13 @@ interface FilterSidebarProps {
   setSelectedGenres: React.Dispatch<React.SetStateAction<GenreType[]>>;
   selectedAreas: AreaType[];
   setSelectedAreas: React.Dispatch<React.SetStateAction<AreaType[]>>;
-  onCloseMobile?: () => void; // モバイル用ドロワーを閉じる用
+  onCloseMobile?: () => void;
   totalCount: number;
   filteredCount: number;
   showFavoritesOnly: boolean;
   setShowFavoritesOnly: (value: boolean) => void;
   favoritesCount: number;
 }
-
-const GENRES: { name: GenreType; color: string; icon: string }[] = [
-  { name: '日本酒', color: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30', icon: '🍶' },
-  { name: 'ビール', color: 'bg-amber-500/20 text-amber-300 border-amber-500/30', icon: '🍺' },
-  { name: 'ウイスキー', color: 'bg-orange-600/20 text-orange-400 border-orange-500/30', icon: '🥃' },
-  { name: 'ワイン', color: 'bg-rose-500/20 text-rose-300 border-rose-500/30', icon: '🍷' },
-  { name: 'その他', color: 'bg-slate-500/20 text-slate-300 border-slate-500/30', icon: '🍹' },
-];
-
-const AREAS: { name: AreaType; desc: string }[] = [
-  { name: '城北', desc: '豊島・北・板橋・練馬' },
-  { name: '城東', desc: '台東・墨田・江東・葛飾など' },
-  { name: '城山', desc: '品川・大田・目黒・港' },
-  { name: '城西', desc: '新宿・渋谷・中野・杉並' },
-  { name: '臨海部', desc: 'お台場・有明・豊洲などの湾岸' },
-  { name: 'その他東京近郊', desc: '東京都下・神奈川・埼玉・千葉' },
-];
 
 export default function FilterSidebar({
   searchQuery,
@@ -50,17 +36,16 @@ export default function FilterSidebar({
   filteredCount,
   showFavoritesOnly,
   setShowFavoritesOnly,
-  favoritesCount
+  favoritesCount,
 }: FilterSidebarProps) {
-
   const handleGenreToggle = (genre: GenreType) => {
-    setSelectedGenres(prev => 
+    setSelectedGenres(prev =>
       prev.includes(genre) ? prev.filter(g => g !== genre) : [...prev, genre]
     );
   };
 
   const handleAreaToggle = (area: AreaType) => {
-    setSelectedAreas(prev => 
+    setSelectedAreas(prev =>
       prev.includes(area) ? prev.filter(a => a !== area) : [...prev, area]
     );
   };
@@ -71,6 +56,12 @@ export default function FilterSidebar({
     setSelectedAreas([]);
     setShowFavoritesOnly(false);
   };
+
+  const hasActiveFilters =
+    selectedGenres.length > 0 ||
+    selectedAreas.length > 0 ||
+    searchQuery.trim() !== '' ||
+    showFavoritesOnly;
 
   return (
     <div className="flex flex-col h-full bg-slate-950/70 backdrop-blur-xl border-r border-slate-800 text-slate-100 p-6 overflow-y-auto">
@@ -83,9 +74,10 @@ export default function FilterSidebar({
           </h2>
         </div>
         {onCloseMobile && (
-          <button 
-            onClick={onCloseMobile} 
+          <button
+            onClick={onCloseMobile}
             className="p-1 rounded-md hover:bg-slate-800 text-slate-400 hover:text-slate-100 transition-colors lg:hidden"
+            aria-label="閉じる"
           >
             <X className="w-6 h-6" />
           </button>
@@ -99,8 +91,8 @@ export default function FilterSidebar({
           <span className="text-3xl font-extrabold text-amber-400">{filteredCount}</span>
           <span className="text-sm text-slate-400">/ {totalCount} 件中</span>
         </div>
-        {(selectedGenres.length > 0 || selectedAreas.length > 0 || searchQuery !== '') && (
-          <button 
+        {hasActiveFilters && (
+          <button
             onClick={clearFilters}
             className="mt-3 text-xs text-amber-400 hover:text-amber-300 hover:underline transition-colors flex items-center"
           >
@@ -124,11 +116,11 @@ export default function FilterSidebar({
             <span className="text-sm font-semibold">お気に入りのみ表示</span>
           </div>
           {favoritesCount > 0 && (
-            <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
-              showFavoritesOnly
-                ? 'bg-rose-400/20 text-rose-300'
-                : 'bg-slate-800 text-slate-500'
-            }`}>
+            <span
+              className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                showFavoritesOnly ? 'bg-rose-400/20 text-rose-300' : 'bg-slate-800 text-slate-500'
+              }`}
+            >
               {favoritesCount}
             </span>
           )}
@@ -152,7 +144,7 @@ export default function FilterSidebar({
         </div>
       </div>
 
-      {/* お酒のジャンル選択 (Event Type) */}
+      {/* お酒のジャンル選択 */}
       <div className="mb-8">
         <label className="block text-xs font-semibold text-slate-400 tracking-wider uppercase mb-3 flex items-center justify-between">
           <span>お酒のジャンル</span>
@@ -163,7 +155,7 @@ export default function FilterSidebar({
           )}
         </label>
         <div className="flex flex-wrap gap-2">
-          {GENRES.map((genre) => {
+          {GENRE_LIST.map((genre) => {
             const isSelected = selectedGenres.includes(genre.name);
             return (
               <button
@@ -194,7 +186,7 @@ export default function FilterSidebar({
           )}
         </label>
         <div className="space-y-2.5">
-          {AREAS.map((area) => {
+          {AREA_LIST.map((area) => {
             const isChecked = selectedAreas.includes(area.name);
             return (
               <label

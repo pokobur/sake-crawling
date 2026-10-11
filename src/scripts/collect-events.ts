@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { GoogleGenAI } from '@google/genai';
 import * as cheerio from 'cheerio';
 import * as dotenv from 'dotenv';
@@ -49,11 +49,11 @@ async function fetchWithUserAgent(url: string): Promise<string> {
  * 1. データベースのクリーンアップ処理
  * 開催終了日が今日より前のイベントを削除
  */
-async function cleanupPastEvents(supabase: any) {
+async function cleanupPastEvents(supabase: SupabaseClient | null) {
   const todayStr = new Date().toISOString().split('T')[0];
   console.log(`[Cleanup] クリーンアップを開始します。基準日: ${todayStr}`);
 
-  if (IS_DRY_RUN) {
+  if (IS_DRY_RUN || !supabase) {
     console.log(`[Cleanup] [Dry Run] 基準日 ${todayStr} より前の過去イベントの削除をシミュレートします。`);
     return;
   }
@@ -375,15 +375,15 @@ ${text}
 /**
  * 6. 抽出したイベントデータを Supabase に upsert
  */
-async function saveEventToDatabase(supabase: any, event: EventData) {
-  if (IS_DRY_RUN) {
+async function saveEventToDatabase(supabase: SupabaseClient | null, event: EventData) {
+  if (IS_DRY_RUN || !supabase) {
     console.log('[DB] [Dry Run] 以下のデータをデータベースに保存したと仮定します:');
     console.log(JSON.stringify(event, null, 2));
     return;
   }
 
   try {
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('events')
       .upsert(event, { onConflict: 'official_url' });
 

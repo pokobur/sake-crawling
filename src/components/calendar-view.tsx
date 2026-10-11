@@ -2,19 +2,11 @@
 
 import React from 'react';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
+import { Event } from '../types/event';
+import { getGenreConfig } from '../constants/genres';
 
-export interface Event {
-  id: string;
-  title: string;
-  start_date: string;
-  end_date: string;
-  location_name: string;
-  address?: string;
-  genre: string[];
-  area: string;
-  official_url?: string;
-  description?: string;
-}
+// 既存コードとの後方互換性のために Event 型を再エクスポート
+export type { Event } from '../types/event';
 
 interface CalendarViewProps {
   currentDate: Date;
@@ -25,26 +17,16 @@ interface CalendarViewProps {
 
 const WEEKDAYS = ['月', '火', '水', '木', '金', '土', '日'];
 
-// ジャンルごとの色定義
-const GENRE_COLORS: { [key: string]: { bg: string; text: string; dot: string } } = {
-  '日本酒': { bg: 'bg-cyan-500/10 hover:bg-cyan-500/20 border-cyan-500/30', text: 'text-cyan-300', dot: 'bg-cyan-400' },
-  'ビール': { bg: 'bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30', text: 'text-amber-300', dot: 'bg-amber-400' },
-  'ウイスキー': { bg: 'bg-orange-500/10 hover:bg-orange-500/20 border-orange-500/30', text: 'text-orange-400', dot: 'bg-orange-500' },
-  'ワイン': { bg: 'bg-rose-500/10 hover:bg-rose-500/20 border-rose-500/30', text: 'text-rose-300', dot: 'bg-rose-400' },
-  'その他': { bg: 'bg-slate-500/10 hover:bg-slate-500/20 border-slate-500/30', text: 'text-slate-300', dot: 'bg-slate-400' }
-};
-
 export default function CalendarView({
   currentDate,
   setCurrentDate,
   events,
-  onSelectEvent
+  onSelectEvent,
 }: CalendarViewProps) {
-  
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth(); // 0-indexed
 
-  // 前月・翌月移動
+  // 前月・翌月・今月移動
   const prevMonth = () => {
     setCurrentDate(new Date(year, month - 1, 1));
   };
@@ -58,17 +40,14 @@ export default function CalendarView({
     setCurrentDate(new Date(today.getFullYear(), today.getMonth(), 1));
   };
 
-  // カレンダーグリッドの日付計算
+  // カレンダーグリッドの日付計算 (6週 = 42マス)
   const getCalendarDays = () => {
-    // 当月の1日
     const firstDay = new Date(year, month, 1);
-    // 当月の末日
     const lastDay = new Date(year, month + 1, 0);
-    
+
     const daysInMonth = lastDay.getDate();
-    // JSのgetDay() は 0:日, 1:月... 6:土
-    const startDayOfWeek = firstDay.getDay(); 
-    // 月曜始まり用にインデックスを調整 (月=0, 火=1, ..., 土=5, 日=6)
+    const startDayOfWeek = firstDay.getDay(); // 0:日, 1:月... 6:土
+    // 月曜始まりにインデックス調整 (月=0, 火=1, ..., 土=5, 日=6)
     const firstDayIndex = startDayOfWeek === 0 ? 6 : startDayOfWeek - 1;
 
     const days: { date: Date; isCurrentMonth: boolean; key: string }[] = [];
@@ -80,7 +59,7 @@ export default function CalendarView({
       days.push({
         date: prevDate,
         isCurrentMonth: false,
-        key: `prev-${prevMonthLastDay - i}`
+        key: `prev-${prevMonthLastDay - i}`,
       });
     }
 
@@ -90,18 +69,18 @@ export default function CalendarView({
       days.push({
         date: currDate,
         isCurrentMonth: true,
-        key: `curr-${i}`
+        key: `curr-${i}`,
       });
     }
 
-    // 翌月の日付で埋める (6行 = 42マスにする)
+    // 翌月の日付で埋める
     const remainingSlots = 42 - days.length;
     for (let i = 1; i <= remainingSlots; i++) {
       const nextDate = new Date(year, month + 1, i);
       days.push({
         date: nextDate,
         isCurrentMonth: false,
-        key: `next-${i}`
+        key: `next-${i}`,
       });
     }
 
@@ -113,9 +92,7 @@ export default function CalendarView({
   // 特定の日付に属するイベントを取得
   const getEventsForDate = (date: Date) => {
     const dateStr = date.toISOString().split('T')[0];
-    
     return events.filter(event => {
-      // ローカルタイムで比較するために、日付文字列のみで比較
       return event.start_date <= dateStr && dateStr <= event.end_date;
     });
   };
@@ -141,7 +118,7 @@ export default function CalendarView({
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
-          
+
           <button
             onClick={setToday}
             className="px-3 py-1 rounded-md text-xs font-semibold hover:bg-slate-800 text-slate-300 hover:text-slate-100 transition-all border border-slate-800"
@@ -162,7 +139,12 @@ export default function CalendarView({
       {/* 曜日ヘッダー */}
       <div className="grid grid-cols-7 gap-1.5 mb-2 text-center text-xs font-bold text-slate-400 tracking-wider">
         {WEEKDAYS.map((day, idx) => (
-          <div key={day} className={`py-2 rounded-md ${idx === 5 ? 'text-amber-300' : idx === 6 ? 'text-rose-400' : ''}`}>
+          <div
+            key={day}
+            className={`py-2 rounded-md ${
+              idx === 5 ? 'text-amber-300' : idx === 6 ? 'text-rose-400' : ''
+            }`}
+          >
             {day}
           </div>
         ))}
@@ -195,35 +177,38 @@ export default function CalendarView({
                       ? 'bg-amber-400 text-slate-950 font-black'
                       : day.isCurrentMonth
                         ? isWeekend
-                          ? day.date.getDay() === 0 ? 'text-rose-400' : 'text-amber-300'
+                          ? day.date.getDay() === 0
+                            ? 'text-rose-400'
+                            : 'text-amber-300'
                           : 'text-slate-300'
                         : 'text-slate-600'
                   }`}
                 >
                   {day.date.getDate()}
                 </span>
-                
-                {/* イベントありドット（モバイル表示等で役立つ） */}
+
+                {/* イベントありドット（モバイル表示等） */}
                 {dayEvents.length > 0 && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 sm:hidden"></span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 sm:hidden" />
                 )}
               </div>
 
               {/* イベントリスト */}
               <div className="flex-1 flex flex-col gap-1 overflow-y-auto max-h-[70px] sm:max-h-none scrollbar-none">
                 {dayEvents.slice(0, 3).map((event) => {
-                  // 代表するお酒ジャンルを取得（無ければその他）
                   const primaryGenre = event.genre[0] || 'その他';
-                  const color = GENRE_COLORS[primaryGenre] || GENRE_COLORS['その他'];
+                  const genreConfig = getGenreConfig(primaryGenre);
 
                   return (
                     <button
                       key={event.id}
                       onClick={() => onSelectEvent(event)}
-                      className={`w-full text-left text-[10px] sm:text-xs px-1.5 py-0.5 sm:py-1 rounded-md border flex items-center space-x-1.5 transition-all select-none truncate ${color.bg} ${color.text} border-slate-800/20`}
+                      className={`w-full text-left text-[10px] sm:text-xs px-1.5 py-0.5 sm:py-1 rounded-md border flex items-center space-x-1.5 transition-all select-none truncate ${genreConfig.calendar.bg} ${genreConfig.calendar.text} border-slate-800/20`}
                       title={event.title}
                     >
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${color.dot}`}></span>
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full shrink-0 ${genreConfig.calendar.dot}`}
+                      />
                       <span className="truncate leading-none">{event.title}</span>
                     </button>
                   );

@@ -1,24 +1,16 @@
 'use client';
 
-import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { Event } from './calendar-view';
+import React, { useEffect, useState, useRef } from 'react';
+import type { Map as LeafletMap, Marker as LeafletMarker } from 'leaflet';
+import { Event } from '../types/event';
+import { getGenreConfig } from '../constants/genres';
 
-// Leaflet の CSS と JS はクライアントサイドでのみ動的にインポートする
 let L: typeof import('leaflet') | null = null;
 
 interface MapViewProps {
   events: Event[];
   onSelectEvent: (event: Event) => void;
 }
-
-// ジャンルごとのマーカー色
-const GENRE_MARKER_COLORS: { [key: string]: string } = {
-  '日本酒': '#06b6d4',   // cyan-500
-  'ビール': '#f59e0b',   // amber-500
-  'ウイスキー': '#f97316', // orange-500
-  'ワイン': '#f43f5e',   // rose-500
-  'その他': '#94a3b8',   // slate-400
-};
 
 // カスタムマーカーアイコンを生成
 function createMarkerIcon(color: string) {
@@ -39,7 +31,7 @@ function createMarkerIcon(color: string) {
   });
 }
 
-// Nominatim API でジオコーディング (キャッシュ付き)
+// Nominatim API でジオコーディング (localStorageキャッシュ付き)
 const GEO_CACHE_KEY = 'sake-calendar-geocache';
 
 function getGeoCache(): Record<string, [number, number]> {
@@ -83,19 +75,18 @@ async function geocodeAddress(address: string): Promise<[number, number] | null>
 
 export default function MapView({ events, onSelectEvent }: MapViewProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<any>(null);
-  const markersRef = useRef<any[]>([]);
+  const mapRef = useRef<LeafletMap | null>(null);
+  const markersRef = useRef<LeafletMarker[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [progress, setProgress] = useState(0);
 
-  // Leaflet の動的インポートとマップの初期化
   useEffect(() => {
     let cancelled = false;
 
     async function initMap() {
       if (!mapContainerRef.current) return;
 
-      // Leaflet を動的にインポート (SSR回避)
+      // Leaflet を動的インポート (SSR回避)
       const leaflet = await import('leaflet');
       L = leaflet;
 
@@ -115,7 +106,7 @@ export default function MapView({ events, onSelectEvent }: MapViewProps) {
         mapRef.current = null;
       }
 
-      // マップを初期化 (東京中心)
+      // マップ初期化 (東京中心)
       const map = leaflet.map(mapContainerRef.current, {
         center: [35.6762, 139.6503],
         zoom: 11,
@@ -123,7 +114,7 @@ export default function MapView({ events, onSelectEvent }: MapViewProps) {
         attributionControl: true,
       });
 
-      // OpenStreetMap タイルレイヤー (ダークテーマ風)
+      // OpenStreetMap タイルレイヤー (ダークテーマ)
       leaflet.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>',
         maxZoom: 19,
@@ -148,18 +139,18 @@ export default function MapView({ events, onSelectEvent }: MapViewProps) {
         const coords = await geocodeAddress(address);
         if (coords && !cancelled) {
           const primaryGenre = event.genre[0] || 'その他';
-          const color = GENRE_MARKER_COLORS[primaryGenre] || GENRE_MARKER_COLORS['その他'];
-          const icon = createMarkerIcon(color);
+          const genreConfig = getGenreConfig(primaryGenre);
+          const icon = createMarkerIcon(genreConfig.markerColor);
 
           const marker = leaflet.marker(coords, { icon })
             .addTo(map)
             .bindPopup(`
-              <div style="font-family: 'Inter', sans-serif; min-width: 180px;">
+              <div style="font-family: inherit; min-width: 180px;">
                 <div style="font-weight: 800; font-size: 13px; color: #f1f5f9; margin-bottom: 4px; line-height: 1.3;">${event.title}</div>
                 <div style="font-size: 11px; color: #94a3b8; margin-bottom: 2px;">📍 ${event.location_name}</div>
                 <div style="font-size: 11px; color: #94a3b8;">📅 ${event.start_date}</div>
                 <div style="margin-top: 8px;">
-                  <span style="display: inline-block; background: ${color}22; color: ${color}; border: 1px solid ${color}44; padding: 2px 8px; border-radius: 9999px; font-size: 10px; font-weight: 600;">${primaryGenre}</span>
+                  <span style="display: inline-block; background: ${genreConfig.markerColor}22; color: ${genreConfig.markerColor}; border: 1px solid ${genreConfig.markerColor}44; padding: 2px 8px; border-radius: 9999px; font-size: 10px; font-weight: 600;">${primaryGenre}</span>
                 </div>
               </div>
             `, {
@@ -176,7 +167,7 @@ export default function MapView({ events, onSelectEvent }: MapViewProps) {
         processed++;
         setProgress(Math.round((processed / total) * 100));
 
-        // Nominatim のレートリミット対策 (1秒に1リクエスト)
+        // Nominatim レートリミット対策
         await new Promise(r => setTimeout(r, 1100));
       }
 
