@@ -1,31 +1,19 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { GoogleGenAI } from '@google/genai';
 import * as cheerio from 'cheerio';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
+import * as fs from 'fs';
+import { Event } from '../types/event';
+import { formatLocalDate } from '../utils/date';
 
 // 環境変数の読み込み (.env.local または .env)
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const IS_DRY_RUN = process.env.DRY_RUN === 'true' || !GEMINI_API_KEY || GEMINI_API_KEY.includes('your-gemini');
 
-// 簡易的なドライラン（テスト）モードの判定
-const IS_DRY_RUN = process.env.DRY_RUN === 'true' || !SUPABASE_URL || SUPABASE_URL.includes('your-supabase') || !GEMINI_API_KEY || GEMINI_API_KEY.includes('your-gemini');
-
-interface EventData {
-  title: string;
-  start_date: string;
-  end_date: string;
-  location_name: string;
-  address: string;
-  genre: ('日本酒' | 'ビール' | 'ウイスキー' | 'ワイン' | 'その他')[];
-  area: '城北' | '城東' | '城山' | '城西' | '臨海部' | 'その他東京近郊';
-  official_url: string;
-  description: string;
-}
+const EVENTS_JSON_PATH = path.resolve(process.cwd(), 'src/data/events.json');
 
 // ヘルパー: 負荷対策用のスリープ
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -34,10 +22,11 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 async function fetchWithUserAgent(url: string): Promise<string> {
   const response = await fetch(url, {
     headers: {
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+      'User-Agent':
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
       'Accept-Language': 'ja,en-US;q=0.7,en;q=0.3',
-    }
+    },
   });
   if (!response.ok) {
     throw new Error(`Failed to fetch ${url}: Status ${response.status}`);
@@ -46,36 +35,46 @@ async function fetchWithUserAgent(url: string): Promise<string> {
 }
 
 /**
- * 1. データベースのクリーンアップ処理
- * 開催終了日が今日より前のイベントを削除
+ * 既存の events.json を読み込み
  */
-async function cleanupPastEvents(supabase: SupabaseClient | null) {
-  const todayStr = new Date().toISOString().split('T')[0];
-  console.log(`[Cleanup] クリーンアップを開始します。基準日: ${todayStr}`);
-
-  if (IS_DRY_RUN || !supabase) {
-    console.log(`[Cleanup] [Dry Run] 基準日 ${todayStr} より前の過去イベントの削除をシミュレートします。`);
-    return;
-  }
-
+function loadExistingEvents(): Event[] {
   try {
-    const { count, error } = await supabase
-      .from('events')
-      .delete({ count: 'exact' })
-      .lt('end_date', todayStr);
-
-    if (error) {
-      throw error;
+    if (fs.existsSync(EVENTS_JSON_PATH)) {
+      const content = fs.readFileSync(EVENTS_JSON_PATH, 'utf-8');
+      return JSON.parse(content) as Event[];
     }
-
-    console.log(`[Cleanup] ${count || 0}件の過去イベントを削除しました。`);
   } catch (error) {
-    console.error('[Cleanup] クリーンアップ中にエラーが発生しました:', error);
+    console.warn('[JSON] 既存の events.json の読み込みに失敗しました。空配列から開始します:', error);
   }
+  return [];
 }
 
 /**
- * 2. PR TIMES の RSS フィードからお酒関連のイベント候補を取得
+ * events.json にイベント一覧を保存
+ */
+function saveEventsToJson(events: Event[]): void {
+  // 開始日順にソート
+  const sorted = [...events].sort((a, b) => a.start_date.localeCompare(b.start_date));
+  fs.writeFileSync(EVENTS_JSON_PATH, JSON.stringify(sorted, null, 2), 'utf-8');
+  console.log(`[JSON] ${sorted.length} 件のイベントを ${EVENTS_JSON_PATH} に保存しました。`);
+}
+
+/**
+ * 過去イベントのクリーンアップ処理（終了日が今日より前のイベントを削除）
+ */
+function cleanupPastEvents(events: Event[]): Event[] {
+  const todayStr = formatLocalDate(new Date());
+  console.log(`[Cleanup] クリーンアップを開始します。基準日: ${todayStr}`);
+
+  const activeEvents = events.filter((e) => e.end_date >= todayStr);
+  const removedCount = events.length - activeEvents.length;
+  console.log(`[Cleanup] ${removedCount} 件の終了済み過去イベントをクリーンアップしました。`);
+
+  return activeEvents;
+}
+
+/**
+ * PR TIMES の RSS フィードからお酒関連のイベント候補を取得
  */
 async function fetchPRTimesCandidates(): Promise<{ title: string; url: string; description: string }[]> {
   console.log('[Scraper] PR TIMES RSS フィードの取得を開始します...');
@@ -85,25 +84,45 @@ async function fetchPRTimesCandidates(): Promise<{ title: string; url: string; d
     const xml = await fetchWithUserAgent('https://prtimes.jp/index.rdf');
     const $ = cheerio.load(xml, { xmlMode: true });
 
-    // お酒関連およびイベント関連のキーワード
-    const sakeKeywords = ['酒', '日本酒', 'ビール', 'ウイスキー', 'ワイン', 'ビア', 'クラフトビール', '焼酎', '泡盛', '発泡酒', 'ブランデー', '洋酒', 'リキュール'];
-    const eventKeywords = ['イベント', 'フェス', '祭り', 'バル', '試飲', 'ビアガーデン', '開催', 'オープン', 'マルシェ', 'カレンダー', 'スケジュール'];
+    const sakeKeywords = [
+      '酒',
+      '日本酒',
+      'ビール',
+      'ウイスキー',
+      'ワイン',
+      'ビア',
+      'クラフトビール',
+      '焼酎',
+      '泡盛',
+      '発泡酒',
+      'ブランデー',
+      '洋酒',
+      'リキュール',
+    ];
+    const eventKeywords = [
+      'イベント',
+      'フェス',
+      '祭り',
+      'バル',
+      '試飲',
+      'ビアガーデン',
+      '開催',
+      'オープン',
+      'マルシェ',
+      'カレンダー',
+      'スケジュール',
+    ];
 
     $('item').each((_, el) => {
       const title = $(el).find('title').text();
       const link = $(el).find('link').text();
       const description = $(el).find('description').text();
 
-      // キーワードによる簡易フィルタリング
-      const hasSake = sakeKeywords.some(kw => title.includes(kw) || description.includes(kw));
-      const hasEvent = eventKeywords.some(kw => title.includes(kw) || description.includes(kw));
+      const hasSake = sakeKeywords.some((kw) => title.includes(kw) || description.includes(kw));
+      const hasEvent = eventKeywords.some((kw) => title.includes(kw) || description.includes(kw));
 
       if (hasSake && hasEvent) {
-        candidates.push({
-          title,
-          url: link,
-          description
-        });
+        candidates.push({ title, url: link, description });
       }
     });
 
@@ -116,7 +135,7 @@ async function fetchPRTimesCandidates(): Promise<{ title: string; url: string; d
 }
 
 /**
- * 3. ビール女子のイベントカテゴリから記事候補を取得
+ * ビール女子のイベントカテゴリから記事候補を取得
  */
 async function fetchBeerGirlCandidates(): Promise<{ title: string; url: string }[]> {
   console.log('[Scraper] ビール女子 イベントカテゴリの取得を開始します...');
@@ -132,10 +151,7 @@ async function fetchBeerGirlCandidates(): Promise<{ title: string; url: string }
 
       if (href) {
         const fullUrl = href.startsWith('http') ? href : `https://beergirl.net${href}`;
-        candidates.push({
-          title,
-          url: fullUrl
-        });
+        candidates.push({ title, url: fullUrl });
       }
     });
 
@@ -148,31 +164,28 @@ async function fetchBeerGirlCandidates(): Promise<{ title: string; url: string }
 }
 
 /**
- * 3b. Let's enjoy TOKYO からビール・お酒イベント候補を取得
+ * Let's enjoy TOKYO からビール・お酒イベント候補を取得
  */
 async function scrapeEnjoyTokyo(): Promise<{ title: string; url: string }[]> {
-  console.log('[Scraper] Let\'s enjoy TOKYO イベント一覧の取得を開始します...');
+  console.log("[Scraper] Let's enjoy TOKYO イベント一覧の取得を開始します...");
   const candidates: { title: string; url: string }[] = [];
 
   try {
     const html = await fetchWithUserAgent('https://www.enjoytokyo.jp/feature/season/beer/');
     const $ = cheerio.load(html);
 
-    // 特集ページのイベントリンクを抽出（一般的なリスト・カード形式に対応）
     $('a[href*="/feature/"], a[href*="/event/"], a[href*="/amuse/"]').each((_, el) => {
       const href = $(el).attr('href');
       const title = $(el).text().trim() || $(el).attr('title')?.trim();
 
       if (href && title && title.length > 5) {
         const fullUrl = href.startsWith('http') ? href : `https://www.enjoytokyo.jp${href}`;
-        // 重複排除
-        if (!candidates.some(c => c.url === fullUrl)) {
+        if (!candidates.some((c) => c.url === fullUrl)) {
           candidates.push({ title, url: fullUrl });
         }
       }
     });
 
-    // フォールバック: 汎用的な記事リストセレクタ
     if (candidates.length === 0) {
       $('.featureList li a, .eventList li a, .articleList li a, .list-item a').each((_, el) => {
         const href = $(el).attr('href');
@@ -180,7 +193,7 @@ async function scrapeEnjoyTokyo(): Promise<{ title: string; url: string }[]> {
 
         if (href && title && title.length > 5) {
           const fullUrl = href.startsWith('http') ? href : `https://www.enjoytokyo.jp${href}`;
-          if (!candidates.some(c => c.url === fullUrl)) {
+          if (!candidates.some((c) => c.url === fullUrl)) {
             candidates.push({ title, url: fullUrl });
           }
         }
@@ -189,46 +202,43 @@ async function scrapeEnjoyTokyo(): Promise<{ title: string; url: string }[]> {
 
     console.log(`[Scraper] Let's enjoy TOKYO からイベント候補を ${candidates.length} 件抽出しました。`);
   } catch (error) {
-    console.warn('[Scraper] ⚠️ Let\'s enjoy TOKYO の取得中にエラーが発生しました（他ソースの処理は継続します）:', error);
+    console.warn('[Scraper] Let\'s enjoy TOKYO の取得をスキップしました (他ソースは継続):', error);
   }
 
   return candidates;
 }
 
 /**
- * 3c. TIMEOUT Tokyo からフード＆ドリンクイベント候補を取得
+ * TIMEOUT Tokyo からフード・ドリンクイベント候補を取得
  */
 async function scrapeTimeoutTokyo(): Promise<{ title: string; url: string }[]> {
-  console.log('[Scraper] TIMEOUT Tokyo フード＆ドリンクカテゴリの取得を開始します...');
+  console.log('[Scraper] TIMEOUT Tokyo イベント一覧の取得を開始します...');
   const candidates: { title: string; url: string }[] = [];
 
   try {
     const html = await fetchWithUserAgent('https://www.timeout.jp/tokyo/ja/food-drink');
     const $ = cheerio.load(html);
 
-    // TIMEOUT Tokyo の記事カード・リスト要素からリンクを抽出
-    $('article a[href], .card a[href], .tile a[href], .article-card a[href]').each((_, el) => {
+    $('article a, .card a, .tile a, .article-card a').each((_, el) => {
       const href = $(el).attr('href');
-      const title = $(el).text().trim() || $(el).find('h2, h3, .title').text().trim() || $(el).attr('title')?.trim();
+      const title = $(el).text().trim() || $(el).attr('title')?.trim();
 
       if (href && title && title.length > 5) {
         const fullUrl = href.startsWith('http') ? href : `https://www.timeout.jp${href}`;
-        if (!candidates.some(c => c.url === fullUrl)) {
+        if (!candidates.some((c) => c.url === fullUrl)) {
           candidates.push({ title, url: fullUrl });
         }
       }
     });
 
-    // フォールバック: 汎用セレクタ
     if (candidates.length === 0) {
       $('a[href*="/tokyo/ja/"]').each((_, el) => {
         const href = $(el).attr('href');
-        const title = $(el).text().trim() || $(el).attr('title')?.trim();
+        const title = $(el).text().trim();
 
-        // food-drink カテゴリトップ自体へのリンクは除外
-        if (href && title && title.length > 5 && !href.endsWith('/food-drink') && !href.endsWith('/food-drink/')) {
+        if (href && title && title.length > 8 && !href.endsWith('/food-drink')) {
           const fullUrl = href.startsWith('http') ? href : `https://www.timeout.jp${href}`;
-          if (!candidates.some(c => c.url === fullUrl)) {
+          if (!candidates.some((c) => c.url === fullUrl)) {
             candidates.push({ title, url: fullUrl });
           }
         }
@@ -237,16 +247,19 @@ async function scrapeTimeoutTokyo(): Promise<{ title: string; url: string }[]> {
 
     console.log(`[Scraper] TIMEOUT Tokyo からイベント候補を ${candidates.length} 件抽出しました。`);
   } catch (error) {
-    console.warn('[Scraper] ⚠️ TIMEOUT Tokyo の取得中にエラーが発生しました（他ソースの処理は継続します）:', error);
+    console.warn('[Scraper] TIMEOUT Tokyo の取得をスキップしました (他ソースは継続):', error);
   }
 
   return candidates;
 }
 
 /**
- * 4. 詳細ページの本文テキストを抽出
+ * 詳細記事のテキストを抽出
  */
-async function fetchDetailContent(url: string, sourceType: 'prtimes' | 'beergirl' | 'enjoytokyo' | 'timeout' | 'generic'): Promise<string> {
+async function fetchDetailContent(
+  url: string,
+  sourceType: 'prtimes' | 'beergirl' | 'enjoytokyo' | 'timeout' | 'generic'
+): Promise<string> {
   try {
     const html = await fetchWithUserAgent(url);
     const $ = cheerio.load(html);
@@ -254,57 +267,64 @@ async function fetchDetailContent(url: string, sourceType: 'prtimes' | 'beergirl
     let text = '';
     switch (sourceType) {
       case 'beergirl':
-        // ビール女子の本文要素
-        text = $('.post .content').text() || $('.post').text() || $('#main').text();
-        break;
-      case 'prtimes':
-        // PR TIMES の本文要素 (一般的なプレスリリース本文は .release-body など)
-        text = $('.release-body').text() || $('.description').text() || $('#main').text();
+        text = $('.articleDetail, .entry-content, .articleBody').text();
         break;
       case 'enjoytokyo':
-        // Let's enjoy TOKYO の本文要素
-        text = $('.featureDetail').text() || $('.eventDetail').text() || $('article').text() || $('#main').text();
+        text = $('.featureDetail, .eventDetail, .articleDetail, .mainContent, #main').text();
         break;
       case 'timeout':
-        // TIMEOUT Tokyo の本文要素
-        text = $('article .article-body').text() || $('article .content-body').text() || $('article').text() || $('#main').text();
+        text = $('.article-body, .content-body, [data-testid="article-body"]').text();
         break;
+      case 'prtimes':
       default:
-        text = $('article').text() || $('#main').text() || $('body').text();
+        text = $('.r-release_body, .description, article, .content').text();
         break;
     }
 
-    // 不要な空白文字の整理
-    return text.replace(/\s+/g, ' ').trim();
+    if (!text.trim()) {
+      text = $('body').text();
+    }
+
+    // 不要な空白を削除して最大3000文字に制限
+    return text.replace(/\s+/g, ' ').trim().slice(0, 3000);
   } catch (error) {
-    console.error(`[Scraper] 詳細ページ (${url}) の取得に失敗しました:`, error);
+    console.error(`[Scraper] 詳細ページの取得に失敗しました (${url}):`, error);
     return '';
   }
 }
 
 /**
- * 5. Gemini API を使用してお酒イベント情報の判定と構造化
+ * Gemini API によるイベントデータの構造化抽出
  */
-async function extractEventDataWithGemini(ai: GoogleGenAI, text: string, sourceUrl: string): Promise<EventData | null> {
-  const prompt = `
-以下のテキストは、Webサイトから取得したプレスリリースまたはイベント紹介記事の本文です。
-このテキストの内容を分析し、以下の条件を満たす「お酒に関するイベント（日本酒、ビール、ウイスキー、ワイン、フェス、試飲会など）の開催情報」であるかを判定してください。
-
-【対象とするイベントの条件】
-1. 主にお酒（日本酒、ビール、ウイスキー、ワイン、その他のアルコール）がテーマ、または提供されるイベントであること。
-2. 東京近郊（東京都、神奈川県、埼玉県、千葉県など）で開催されるリアルイベントであること（オンライン限定、東京近郊以外での開催、または単なる新商品の発売・業務提携などのニュースは対象外）。
-3. 開催スケジュール（開始日・終了日）が明記されていること。
-
-テキスト：
-${text}
-
-ソースURL: ${sourceUrl}
-`;
-
+async function extractEventDataWithGemini(
+  ai: GoogleGenAI,
+  text: string,
+  sourceUrl: string
+): Promise<Event | null> {
   try {
+    const currentYear = new Date().getFullYear();
+
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: prompt,
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            {
+              text: `以下のテキストから「お酒に関するイベント情報」を抽出してください。
+現在年は ${currentYear} 年です。日付の年が省略されている場合は、原則として ${currentYear} 年として補完してください。
+
+【厳格な判定条件】
+- 東京近郊（東京都、神奈川県、埼玉県、千葉県）で開催されるリアルイベントのみを対象とします。
+- オンライン限定イベント、新商品の単なる発売情報、お酒と関係ないイベントの場合は "is_alcohol_event": false としてください。
+- 公式サイトURL（official_url）は、イベント専用の公式HPや特設サイトのURLを本文から探してください。もし本文内に公式サイトURLが見当たらない場合は、ソース元のURL（${sourceUrl}）を設定してください。
+
+【テキスト】
+${text}`,
+            },
+          ],
+        },
+      ],
       config: {
         responseMimeType: 'application/json',
         responseSchema: {
@@ -312,38 +332,39 @@ ${text}
           properties: {
             is_alcohol_event: {
               type: 'BOOLEAN',
-              description: 'テキストがお酒に関する東京近郊のリアルイベント情報である場合は true、そうでない場合は false。'
+              description: 'テキストがお酒に関する東京近郊のリアルイベント情報である場合は true、そうでない場合は false。',
             },
             event: {
               type: 'OBJECT',
               properties: {
-                title: { type: 'STRING', description: 'イベント名。魅力的な正式名称を抽出してください。' },
+                title: { type: 'STRING', description: 'イベント名。正式名称を抽出してください。' },
                 start_date: { type: 'STRING', description: 'イベント開始日。YYYY-MM-DD 形式。' },
                 end_date: { type: 'STRING', description: 'イベント終了日。単発イベントの場合は開始日と同じ日付。YYYY-MM-DD 形式。' },
-                location_name: { type: 'STRING', description: '会場名（例：池袋サンシャインシティ、日比谷公園など）' },
-                address: { type: 'STRING', description: '住所（可能な限り市区町村や番地まで詳細に）' },
+                location_name: { type: 'STRING', description: '会場名（例：日比谷公園、池袋サンシャインシティなど）' },
+                address: { type: 'STRING', description: '住所' },
                 genre: {
                   type: 'ARRAY',
                   items: {
                     type: 'STRING',
-                    enum: ['日本酒', 'ビール', 'ウイスキー', 'ワイン', 'その他']
+                    enum: ['日本酒', 'ビール', 'ウイスキー', 'ワイン', 'その他'],
                   },
-                  description: '該当するお酒のジャンル。複数選択可能。'
+                  description: '該当するお酒のジャンル。複数選択可能。',
                 },
                 area: {
                   type: 'STRING',
                   enum: ['城北', '城東', '城山', '城西', '臨海部', 'その他東京近郊'],
-                  description: '開催エリア。判定基準: 城北(豊島/北/板橋/練馬)、城東(台東/墨田/江東/荒川/足立/葛飾/江戸川)、城山(品川/大田/目黒/港)、城西(新宿/渋谷/中野/杉並)、臨海部(港区・江東区などの東京湾岸沿い・お台場・有明・豊洲など)、その他東京近郊(東京都下、神奈川、埼玉、千葉など)。'
+                  description:
+                    '開催エリア。判定基準: 城北(豊島/北/板橋/練馬)、城東(台東/墨田/江東/荒川/足立/葛飾/江戸川)、城山(品川/大田/目黒/港)、城西(新宿/渋谷/中野/杉並)、臨海部(港区・江東区などの東京湾岸沿い・お台場・有明・豊洲など)、その他東京近郊(東京都下、神奈川、埼玉、千葉など)。',
                 },
-                official_url: { type: 'STRING', description: '公式サイトのURL。不明な場合はソースURL（${sourceUrl}）をそのまま設定。' },
-                description: { type: 'STRING', description: 'イベントの短い概要（100文字程度）' }
+                official_url: { type: 'STRING', description: '公式サイトのURL。不明な場合はソースURL（${sourceUrl}）を設定。' },
+                description: { type: 'STRING', description: 'イベントの短い概要（100文字程度）' },
               },
-              required: ['title', 'start_date', 'end_date', 'location_name', 'genre', 'area', 'official_url', 'description']
-            }
+              required: ['title', 'start_date', 'end_date', 'location_name', 'genre', 'area', 'official_url', 'description'],
+            },
           },
-          required: ['is_alcohol_event']
-        }
-      }
+          required: ['is_alcohol_event'],
+        },
+      },
     });
 
     if (!response.text) return null;
@@ -354,7 +375,6 @@ ${text}
       if (!url || url === '不明' || url === 'なし' || url === 'null') {
         url = sourceUrl;
       }
-      // プロトコル補完
       if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
         if (/^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(url)) {
           url = `https://${url}`;
@@ -363,7 +383,8 @@ ${text}
         }
       }
       result.event.official_url = url;
-      return result.event as EventData;
+      result.event.id = `event-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      return result.event as Event;
     }
   } catch (error) {
     console.error(`[LLM] Gemini によるデータ抽出中にエラーが発生しました (URL: ${sourceUrl}):`, error);
@@ -373,121 +394,89 @@ ${text}
 }
 
 /**
- * 6. 抽出したイベントデータを Supabase に upsert
- */
-async function saveEventToDatabase(supabase: SupabaseClient | null, event: EventData) {
-  if (IS_DRY_RUN || !supabase) {
-    console.log('[DB] [Dry Run] 以下のデータをデータベースに保存したと仮定します:');
-    console.log(JSON.stringify(event, null, 2));
-    return;
-  }
-
-  try {
-    const { error } = await supabase
-      .from('events')
-      .upsert(event, { onConflict: 'official_url' });
-
-    if (error) {
-      throw error;
-    }
-
-    console.log(`[DB] 保存成功: ${event.title}`);
-  } catch (error) {
-    console.error(`[DB] 保存中にエラーが発生しました (${event.title}):`, error);
-  }
-}
-
-/**
  * メイン処理
  */
 async function main() {
   console.log('=== お酒イベント自動収集パイプライン 起動 ===');
   if (IS_DRY_RUN) {
-    console.log('⚠️ 注意: 環境変数が未設定、またはプレースホルダーのため [ドライラン (テストモード)] で実行します。実際のDB保存やGemini API呼び出しはシミュレートされるか、一部制限されます。');
+    console.log('⚠️ 注意: GEMINI_API_KEY が未設定のため [ドライラン (テストモード)] で実行します。');
   }
 
-  // クライアント初期化
-  const supabase = IS_DRY_RUN ? null : createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
-  const ai = IS_DRY_RUN && !GEMINI_API_KEY ? null : new GoogleGenAI({ apiKey: GEMINI_API_KEY || 'DUMMY_KEY' });
+  const ai = IS_DRY_RUN || !GEMINI_API_KEY ? null : new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
-  // 1. クリーンアップ
-  await cleanupPastEvents(supabase);
+  // 1. 既存データの読み込みと過去イベントのクリーンアップ
+  let currentEvents = loadExistingEvents();
+  currentEvents = cleanupPastEvents(currentEvents);
 
-  // 2. 候補リストの取得
+  // 2. 各ソースから候補を取得
   const prTimesCandidates = await fetchPRTimesCandidates();
   const beerGirlCandidates = await fetchBeerGirlCandidates();
   const enjoyTokyoCandidates = await scrapeEnjoyTokyo();
   const timeoutTokyoCandidates = await scrapeTimeoutTokyo();
 
-  // 3. 詳細取得・構造化・保存
   const allCandidates = [
-    ...prTimesCandidates.map(c => ({ ...c, sourceType: 'prtimes' as const })),
-    ...beerGirlCandidates.map(c => ({ ...c, sourceType: 'beergirl' as const, description: '' })),
-    ...enjoyTokyoCandidates.map(c => ({ ...c, sourceType: 'enjoytokyo' as const, description: '' })),
-    ...timeoutTokyoCandidates.map(c => ({ ...c, sourceType: 'timeout' as const, description: '' }))
+    ...prTimesCandidates.map((c) => ({ ...c, sourceType: 'prtimes' as const })),
+    ...beerGirlCandidates.map((c) => ({ ...c, sourceType: 'beergirl' as const, description: '' })),
+    ...enjoyTokyoCandidates.map((c) => ({ ...c, sourceType: 'enjoytokyo' as const, description: '' })),
+    ...timeoutTokyoCandidates.map((c) => ({ ...c, sourceType: 'timeout' as const, description: '' })),
   ];
 
-  // 負荷対策のため、順番に処理
-  let processedCount = 0;
-  let savedCount = 0;
-
-  // テスト時は上限を低くする (PR TIMES, ビール女子それぞれ最新3件程度)
-  const maxToProcess = 10; 
+  const maxToProcess = 10;
   console.log(`[Pipeline] 抽出された全候補 ${allCandidates.length} 件のうち、最大 ${maxToProcess} 件を処理します。`);
 
-  for (const candidate of allCandidates.slice(0, maxToProcess)) {
-    processedCount++;
-    console.log(`\n[Pipeline] (${processedCount}/${maxToProcess}) 処理中: ${candidate.title}`);
-    console.log(`[Pipeline] ソースURL: ${candidate.url}`);
+  let addedCount = 0;
 
-    // 詳細ページ本文取得
+  for (const candidate of allCandidates.slice(0, maxToProcess)) {
+    // 既存イベントに同じURLがすでにあればスキップ
+    const exists = currentEvents.some((e) => e.official_url === candidate.url);
+    if (exists) {
+      console.log(`ℹ️ すでに登録済みのイベントのためスキップ: ${candidate.title}`);
+      continue;
+    }
+
+    console.log(`\n[Pipeline] 処理中: ${candidate.title} (${candidate.url})`);
+
     const detailText = await fetchDetailContent(candidate.url, candidate.sourceType);
     if (!detailText) {
       console.log('⚠️ 本文が取得できなかったためスキップします。');
       continue;
     }
 
-    // Gemini APIによる構造化 (ドライランモードでAPIキーもない場合はモックデータを生成)
-    let eventData: EventData | null = null;
-    if (IS_DRY_RUN && (!GEMINI_API_KEY || GEMINI_API_KEY.includes('your-gemini'))) {
-      console.log('[LLM] [Dry Run] APIキーがないため、モックデータを生成します。');
-      // ソース種別に応じたモックデータの生成
-      const mockBySource: Record<string, Partial<EventData>> = {
-        prtimes: { location_name: '池袋サンシャインシティ', address: '東京都豊島区東池袋３丁目１', genre: ['日本酒', 'その他'], area: '城北' },
-        beergirl: { location_name: '下北沢SHELTER', address: '東京都世田谷区北沢２丁目６−１０', genre: ['ビール'], area: '城西' },
-        enjoytokyo: { location_name: '恵比寿ガーデンプレイス', address: '東京都渋谷区恵比寿４丁目２０', genre: ['ビール', 'ワイン'], area: '城西' },
-        timeout: { location_name: '六本木ヒルズアリーナ', address: '東京都港区六本木６丁目１０−１', genre: ['日本酒', 'ビール'], area: '城山' },
-      };
-      const mock = mockBySource[candidate.sourceType] || mockBySource.prtimes;
+    let eventData: Event | null = null;
+    if (IS_DRY_RUN || !ai) {
+      console.log('[LLM] [Dry Run] APIキーがないため、シミュレーションデータを生成します。');
       eventData = {
+        id: `mock-${Date.now()}`,
         title: candidate.title,
-        start_date: new Date().toISOString().split('T')[0],
-        end_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        location_name: mock.location_name!,
-        address: mock.address!,
-        genre: mock.genre! as EventData['genre'],
-        area: mock.area! as EventData['area'],
+        start_date: formatLocalDate(new Date()),
+        end_date: formatLocalDate(new Date(Date.now() + 24 * 60 * 60 * 1000)),
+        location_name: '都内イベント会場',
+        address: '東京都千代田区',
+        genre: ['ビール'],
+        area: '城山',
         official_url: candidate.url,
-        description: `【モックデータ】${candidate.title}。お酒と音楽を同時に楽しめる夏限定のフェスティバル。`
+        description: `【自動抽出】${candidate.title}。`,
       };
-    } else if (ai) {
+    } else {
       eventData = await extractEventDataWithGemini(ai, detailText, candidate.url);
     }
 
     if (eventData) {
-      console.log(`✨ イベント情報として検出されました: ${eventData.title} (${eventData.genre.join(', ')})`);
-      await saveEventToDatabase(supabase, eventData);
-      savedCount++;
+      console.log(`✨ 新規イベントを追加: ${eventData.title} (${eventData.start_date})`);
+      currentEvents.push(eventData);
+      addedCount++;
     } else {
-      console.log('ℹ️ お酒イベント情報ではない、または判定基準を満たさないためスキップされました。');
+      console.log('ℹ️ お酒イベント条件を満たさないためスキップされました。');
     }
 
-    // 負荷防止ウェイト (1.5秒)
     await sleep(1500);
   }
 
+  // 3. events.json に書き込み保存
+  saveEventsToJson(currentEvents);
+
   console.log('\n=== パイプライン処理完了 ===');
-  console.log(`処理した候補: ${processedCount} 件 / 保存したイベント: ${savedCount} 件`);
+  console.log(`新規追加: ${addedCount} 件 / 合計イベント数: ${currentEvents.length} 件`);
 }
 
 main().catch(console.error);
