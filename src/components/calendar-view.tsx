@@ -102,36 +102,40 @@ export default function CalendarView({
   const todayStr = formatLocalDate(new Date());
 
   return (
-    <div className="bg-slate-950/40 backdrop-blur-md rounded-2xl border border-slate-800/80 p-6 flex flex-col h-full">
+    <div className="bg-slate-950/60 backdrop-blur-xl rounded-3xl border border-slate-800/80 p-5 sm:p-6 flex flex-col h-full shadow-2xl">
       {/* カレンダーヘッダー */}
-      <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-center mb-5 gap-3">
         <div className="flex items-center space-x-3">
-          <CalendarIcon className="w-6 h-6 text-amber-400" />
-          <h2 className="text-2xl font-extrabold tracking-widest text-slate-100 uppercase">
-            {year}年 {month + 1}月
-          </h2>
+          <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+            <CalendarIcon className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-xl sm:text-2xl font-black tracking-widest text-slate-100 uppercase">
+              {year}年 {month + 1}月
+            </h2>
+          </div>
         </div>
 
-        <div className="flex items-center space-x-2 bg-slate-900/80 border border-slate-800 rounded-lg p-1.5">
+        <div className="flex items-center space-x-1.5 bg-slate-900/90 border border-slate-800 rounded-xl p-1 shadow-inner">
           <button
             onClick={prevMonth}
-            className="p-1.5 rounded-md hover:bg-slate-800 text-slate-300 hover:text-slate-100 transition-all"
-            aria-label="前月"
+            className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-slate-100 transition-all active:scale-95"
+            aria-label="前月へ移動"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
 
           <button
             onClick={setToday}
-            className="px-3 py-1 rounded-md text-xs font-semibold hover:bg-slate-800 text-slate-300 hover:text-slate-100 transition-all border border-slate-800"
+            className="px-3 py-1 rounded-lg text-xs font-bold bg-slate-800 hover:bg-slate-750 text-amber-300 hover:text-amber-200 transition-all border border-slate-700/80 shadow-xs"
           >
-            今日
+            今月へ
           </button>
 
           <button
             onClick={nextMonth}
-            className="p-1.5 rounded-md hover:bg-slate-800 text-slate-300 hover:text-slate-100 transition-all"
-            aria-label="翌月"
+            className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-slate-100 transition-all active:scale-95"
+            aria-label="翌月へ移動"
           >
             <ChevronRight className="w-5 h-5" />
           </button>
@@ -139,12 +143,16 @@ export default function CalendarView({
       </div>
 
       {/* 曜日ヘッダー */}
-      <div className="grid grid-cols-7 gap-1.5 mb-2 text-center text-xs font-bold text-slate-400 tracking-wider">
+      <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-2 text-center text-xs font-extrabold tracking-wider">
         {WEEKDAYS.map((day, idx) => (
           <div
             key={day}
-            className={`py-2 rounded-md ${
-              idx === 5 ? 'text-amber-300' : idx === 6 ? 'text-rose-400' : ''
+            className={`py-2 rounded-lg bg-slate-900/40 border border-slate-850/60 ${
+              idx === 5
+                ? 'text-sky-300 bg-sky-950/20'
+                : idx === 6
+                ? 'text-rose-400 bg-rose-950/20'
+                : 'text-slate-400'
             }`}
           >
             {day}
@@ -152,8 +160,8 @@ export default function CalendarView({
         ))}
       </div>
 
-      {/* 日付グリッド */}
-      <div className="grid grid-cols-7 gap-1.5 flex-1 min-h-[450px]">
+      {/* 日付グリッド (42マス) */}
+      <div className="grid grid-cols-7 gap-1 sm:gap-2 flex-1 min-h-[460px]">
         {calendarDays.map((day) => {
           const dateStr = formatLocalDate(day.date);
           const isToday = dateStr === todayStr;
@@ -163,40 +171,47 @@ export default function CalendarView({
           return (
             <div
               key={day.key}
-              className={`min-h-[70px] p-1.5 rounded-xl border flex flex-col transition-all ${
+              aria-label={`${year}年${month + 1}月${day.date.getDate()}日 ${dayEvents.length}件のイベント`}
+              className={`min-h-[72px] sm:min-h-[82px] p-1.5 sm:p-2 rounded-2xl border flex flex-col transition-all duration-200 ${
                 day.isCurrentMonth
                   ? isToday
-                    ? 'bg-slate-900/90 border-amber-500/70 shadow-inner'
-                    : 'bg-slate-900/20 border-slate-900 hover:bg-slate-900/40'
-                  : 'bg-slate-950/10 border-transparent opacity-30 text-slate-600'
+                    ? 'bg-slate-900/90 border-amber-400/80 shadow-lg shadow-amber-500/10 ring-1 ring-amber-400/50'
+                    : 'bg-slate-900/30 border-slate-800/80 hover:bg-slate-900/60 hover:border-slate-700/80'
+                  : 'bg-slate-950/20 border-slate-900/30 opacity-25 text-slate-600'
               }`}
             >
               {/* 日付番号とマーク */}
-              <div className="flex justify-between items-center mb-1">
+              <div className="flex justify-between items-center mb-1.5">
                 <span
-                  className={`text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full ${
+                  className={`text-xs font-black w-6 h-6 flex items-center justify-center rounded-lg ${
                     isToday
-                      ? 'bg-amber-400 text-slate-950 font-black'
+                      ? 'bg-gradient-to-r from-amber-400 to-orange-400 text-slate-950 shadow-md font-black ring-1 ring-amber-300'
                       : day.isCurrentMonth
-                        ? isWeekend
-                          ? day.date.getDay() === 0
-                            ? 'text-rose-400'
-                            : 'text-amber-300'
-                          : 'text-slate-300'
-                        : 'text-slate-600'
+                      ? isWeekend
+                        ? day.date.getDay() === 0
+                          ? 'text-rose-400 bg-rose-500/10'
+                          : 'text-sky-300 bg-sky-500/10'
+                        : 'text-slate-300'
+                      : 'text-slate-600'
                   }`}
                 >
                   {day.date.getDate()}
                 </span>
 
-                {/* イベントありドット（モバイル表示等） */}
-                {dayEvents.length > 0 && (
+                {isToday && (
+                  <span className="text-[9px] font-black text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded border border-amber-400/30 hidden sm:inline">
+                    TODAY
+                  </span>
+                )}
+
+                {/* イベントありドット（モバイル表示） */}
+                {dayEvents.length > 0 && !isToday && (
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400 sm:hidden" />
                 )}
               </div>
 
               {/* イベントリスト */}
-              <div className="flex-1 flex flex-col gap-1 overflow-y-auto max-h-[70px] sm:max-h-none scrollbar-none">
+              <div className="flex-1 flex flex-col gap-1 overflow-y-auto max-h-[72px] sm:max-h-none scrollbar-none">
                 {dayEvents.slice(0, 3).map((event) => {
                   const primaryGenre = event.genre[0] || 'その他';
                   const genreConfig = getGenreConfig(primaryGenre);
@@ -205,18 +220,16 @@ export default function CalendarView({
                     <button
                       key={event.id}
                       onClick={() => onSelectEvent(event)}
-                      className={`w-full text-left text-[10px] sm:text-xs px-1.5 py-0.5 sm:py-1 rounded-md border flex items-center space-x-1.5 transition-all select-none truncate ${genreConfig.calendar.bg} ${genreConfig.calendar.text} border-slate-800/20`}
-                      title={event.title}
+                      className={`w-full text-left text-[10px] sm:text-[11px] font-semibold px-2 py-1 rounded-lg border flex items-center space-x-1.5 transition-all select-none truncate shadow-xs ${genreConfig.calendar.bg} ${genreConfig.calendar.text} hover:scale-[1.02] active:scale-95`}
+                      title={`${event.title} (${event.location_name})`}
                     >
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full shrink-0 ${genreConfig.calendar.dot}`}
-                      />
-                      <span className="truncate leading-none">{event.title}</span>
+                      <span className="shrink-0 text-[10px]">{genreConfig.icon}</span>
+                      <span className="truncate leading-tight">{event.title}</span>
                     </button>
                   );
                 })}
                 {dayEvents.length > 3 && (
-                  <div className="text-[9px] text-slate-500 text-center font-semibold">
+                  <div className="text-[9px] text-slate-400 text-center font-bold bg-slate-800/40 rounded py-0.5 mt-0.5">
                     他 {dayEvents.length - 3} 件
                   </div>
                 )}

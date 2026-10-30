@@ -4,6 +4,8 @@ export type AreaType = '城北' | '城東' | '城山' | '城西' | '臨海部' |
 
 export type ViewMode = 'calendar' | 'list' | 'map';
 
+export type DateFilterType = 'all' | 'weekend' | 'month';
+
 export interface Event {
   id: string;
   title: string;

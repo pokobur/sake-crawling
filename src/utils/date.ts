@@ -53,13 +53,54 @@ export function formatShortDateRange(startDate: string, endDate: string): string
 }
 
 /**
+ * イベントが今週末（直近の土曜・日曜）に開催中か判定
+ */
+export function isEventInWeekend(startDate: string, endDate: string): boolean {
+  const now = new Date();
+  const currentDay = now.getDay(); // 0:日, 1:月, ... 6:土
+
+  // 直近の土曜日の計算
+  const saturday = new Date(now);
+  const daysUntilSaturday = currentDay === 0 ? -1 : currentDay === 6 ? 0 : 6 - currentDay;
+  saturday.setDate(now.getDate() + daysUntilSaturday);
+
+  // 直近の日曜日の計算
+  const sunday = new Date(saturday);
+  sunday.setDate(saturday.getDate() + 1);
+
+  const satStr = formatLocalDate(saturday);
+  const sunStr = formatLocalDate(sunday);
+
+  // イベントの期間と [satStr, sunStr] が重複しているか
+  return !(endDate < satStr || startDate > sunStr);
+}
+
+/**
+ * イベントが今月（当月1日〜末日）に開催中か判定
+ */
+export function isEventInCurrentMonth(startDate: string, endDate: string): boolean {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+
+  const firstDayStr = formatLocalDate(firstDay);
+  const lastDayStr = formatLocalDate(lastDay);
+
+  // イベントの期間と [firstDayStr, lastDayStr] が重複しているか
+  return !(endDate < firstDayStr || startDate > lastDayStr);
+}
+
+/**
  * Googleカレンダー登録用URLを生成
  */
 export function buildGoogleCalendarUrl(
   event: Pick<Event, 'title' | 'start_date' | 'end_date' | 'location_name' | 'address' | 'description'>
 ): string {
   const startDateGcal = event.start_date.replace(/-/g, '');
-  
+
   // 終日イベントの場合、Googleカレンダー仕様として終了日は「翌日」を指定
   const endParts = event.end_date.split('-').map(Number);
   const endDateObj = new Date(endParts[0], endParts[1] - 1, endParts[2] + 1);

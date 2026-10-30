@@ -1,13 +1,15 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Event, GenreType, AreaType, EventsApiResponse } from '../types/event';
+import { Event, GenreType, AreaType, DateFilterType, EventsApiResponse } from '../types/event';
+import { isEventInWeekend, isEventInCurrentMonth } from '../utils/date';
 
 export interface UseEventsFilters {
   searchQuery: string;
   selectedGenres: GenreType[];
   selectedAreas: AreaType[];
   showFavoritesOnly: boolean;
+  dateFilter?: DateFilterType;
 }
 
 export function useEvents(
@@ -20,7 +22,7 @@ export function useEvents(
   const [isMock, setIsMock] = useState(false);
   const [fetchIndex, setFetchIndex] = useState(0);
 
-  const { searchQuery, selectedGenres, selectedAreas, showFavoritesOnly } = filters;
+  const { searchQuery, selectedGenres, selectedAreas, showFavoritesOnly, dateFilter = 'all' } = filters;
 
   const refetch = useCallback(() => {
     setLoading(true);
@@ -61,7 +63,7 @@ export function useEvents(
     };
   }, [fetchIndex]);
 
-  // フィルタリング処理（useMemoで最適化）
+  // 複合フィルタリング処理
   const filteredEvents = useMemo(() => {
     let result = events;
 
@@ -70,7 +72,14 @@ export function useEvents(
       result = result.filter(event => isFavorite(event.id));
     }
 
-    // 2. キーワード検索
+    // 2. 日付クイックフィルター (すべて / 今週末 / 今月)
+    if (dateFilter === 'weekend') {
+      result = result.filter(event => isEventInWeekend(event.start_date, event.end_date));
+    } else if (dateFilter === 'month') {
+      result = result.filter(event => isEventInCurrentMonth(event.start_date, event.end_date));
+    }
+
+    // 3. キーワード検索
     const trimmedQuery = searchQuery.trim().toLowerCase();
     if (trimmedQuery !== '') {
       result = result.filter(event => {
@@ -83,14 +92,14 @@ export function useEvents(
       });
     }
 
-    // 3. お酒ジャンル（OR検索）
+    // 4. お酒ジャンル（OR検索）
     if (selectedGenres.length > 0) {
       result = result.filter(event =>
         event.genre.some(g => selectedGenres.includes(g))
       );
     }
 
-    // 4. エリア（OR検索）
+    // 5. エリア（OR検索）
     if (selectedAreas.length > 0) {
       result = result.filter(event =>
         selectedAreas.includes(event.area)
@@ -98,7 +107,7 @@ export function useEvents(
     }
 
     return result;
-  }, [events, searchQuery, selectedGenres, selectedAreas, showFavoritesOnly, isFavorite]);
+  }, [events, searchQuery, selectedGenres, selectedAreas, showFavoritesOnly, dateFilter, isFavorite]);
 
   return {
     events,

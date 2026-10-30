@@ -2,18 +2,56 @@ import { Event } from '../types/event';
 import { formatDate } from './date';
 
 /**
- * URLがプロトコルで始まっていない場合に https:// を補正
+ * URLが安全なHTTP / HTTPSプロトコルであるか判定
+ */
+export function isSafeUrl(url: string | undefined): boolean {
+  if (!url) return false;
+  const trimmed = url.trim();
+
+  // 空文字または # のみはセーフ（ページ内リンク等）
+  if (trimmed === '#' || trimmed === '') return true;
+
+  // 危険なスキームをブラックリスト遮断
+  const lower = trimmed.toLowerCase();
+  if (
+    lower.startsWith('javascript:') ||
+    lower.startsWith('data:') ||
+    lower.startsWith('vbscript:') ||
+    lower.startsWith('file:')
+  ) {
+    return false;
+  }
+
+  // http / https で始まるか、または有効なドメイン形式か
+  try {
+    const parsed = new URL(trimmed.startsWith('http://') || trimmed.startsWith('https://') ? trimmed : `https://${trimmed}`);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * URLがプロトコルで始まっていない場合に https:// を補正し、危険なスキームを無害化
  */
 export function getAbsoluteUrl(url: string | undefined): string {
   if (!url) return '#';
   const trimmed = url.trim();
+
+  // 危険なスキームは強制的に '#' に無害化
+  if (!isSafeUrl(trimmed)) {
+    return '#';
+  }
+
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
     return trimmed;
   }
+
   if (/^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(trimmed)) {
     return `https://${trimmed}`;
   }
-  return trimmed;
+
+  return '#';
 }
 
 /**
@@ -42,7 +80,12 @@ export function isPastEventUrl(url: string | undefined): boolean {
  */
 export function isNewsSourceUrl(url: string | undefined): boolean {
   if (!url) return false;
-  return url.includes('prtimes.jp') || url.includes('beergirl.net') || url.includes('enjoytokyo.jp') || url.includes('timeout.jp');
+  return (
+    url.includes('prtimes.jp') ||
+    url.includes('beergirl.net') ||
+    url.includes('enjoytokyo.jp') ||
+    url.includes('timeout.jp')
+  );
 }
 
 /**
@@ -76,12 +119,13 @@ export function buildSnsShareUrls(event: Pick<Event, 'title' | 'location_name' |
   const formattedDate = formatDate(event.start_date);
   const shareText = `🍺 ${event.title} @ ${event.location_name}（${formattedDate}）#お酒イベント`;
   const shareUrl = event.official_url ? getAbsoluteUrl(event.official_url) : '';
+  const safeShareUrl = shareUrl !== '#' ? shareUrl : '';
 
   const xShareUrl = `https://x.com/intent/tweet?text=${encodeURIComponent(shareText)}${
-    shareUrl ? `&url=${encodeURIComponent(shareUrl)}` : ''
+    safeShareUrl ? `&url=${encodeURIComponent(safeShareUrl)}` : ''
   }`;
 
-  const lineTargetUrl = shareUrl || buildGoogleSearchUrl(event.title, event.location_name);
+  const lineTargetUrl = safeShareUrl || buildGoogleSearchUrl(event.title, event.location_name);
   const lineShareUrl = `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(lineTargetUrl)}`;
 
   return { xShareUrl, lineShareUrl };
