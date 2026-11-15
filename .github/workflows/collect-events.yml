@@ -2,8 +2,11 @@ name: Sake Event Data Collector
 
 on:
   schedule:
-    - cron: '0 0 * * *' # 毎日日本時間午前9時に実行
+    - cron: '0 0 * * *' # 毎日日本時間午前9時 (UTC 0:00) に自動実行
   workflow_dispatch:   # 手動実行を可能にする
+
+permissions:
+  contents: write
 
 jobs:
   collect:
@@ -12,6 +15,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -24,7 +29,17 @@ jobs:
 
       - name: Run Event Data Collector
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: npm run collect
+
+      - name: Commit and Push Updated Events Data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add src/data/events.json
+          if git diff --staged --quiet; then
+            echo "No changes to events.json"
+          else
+            git commit -m "chore(data): auto-update events.json [skip ci]"
+            git push
+          fi
