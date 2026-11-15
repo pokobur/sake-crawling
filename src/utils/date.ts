@@ -11,6 +11,38 @@ export function formatLocalDate(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
+
+/**
+ * YYYY-MM-DD 文字列をローカルタイムの Date オブジェクトに変換
+ */
+export function parseLocalDate(dateStr: string): Date | null {
+  const parts = dateStr.split('-').map(Number);
+  if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
+  const [year, month, day] = parts;
+  return new Date(year, month - 1, day);
+}
+
+/**
+ * YYYY-MM-DD 形式の日付文字列を「YYYY年M月D日（曜）」に変換
+ */
+export function formatDateWithWeekday(dateStr: string): string {
+  const date = parseLocalDate(dateStr);
+  if (!date) return formatDate(dateStr);
+  const weekday = WEEKDAY_LABELS[date.getDay()];
+  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日（${weekday}）`;
+}
+
+/**
+ * YYYY-MM-DD 文字列を指定日数だけ前後させた YYYY-MM-DD 文字列を返す
+ */
+export function shiftDateString(dateStr: string, offsetDays: number): string {
+  const date = parseLocalDate(dateStr);
+  if (!date) return dateStr;
+  date.setDate(date.getDate() + offsetDays);
+  return formatLocalDate(date);
+}
+
 /**
  * YYYY-MM-DD 形式の日付文字列を「YYYY年M月D日」に変換
  */

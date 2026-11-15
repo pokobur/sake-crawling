@@ -72,7 +72,7 @@ export default function EventDetail({
       {/* 半透明バックドロップ (クリックで閉じる) */}
       <div
         onClick={onClose}
-        className="fixed inset-0 bg-slate-950/75 backdrop-blur-md z-40 transition-opacity animate-fade-in"
+        className="fixed inset-0 bg-slate-950/75 backdrop-blur-md z-50 transition-opacity animate-fade-in"
         aria-hidden="true"
       />
 
@@ -81,7 +81,7 @@ export default function EventDetail({
         role="dialog"
         aria-modal="true"
         aria-labelledby="event-detail-title"
-        className="fixed bottom-0 sm:bottom-auto sm:top-0 right-0 max-h-[92vh] sm:max-h-full h-auto sm:h-full w-full sm:w-[480px] bg-slate-950/95 backdrop-blur-2xl border-t sm:border-t-0 sm:border-l border-slate-800 shadow-2xl text-slate-100 z-50 flex flex-col rounded-t-3xl sm:rounded-none animate-slide-in"
+        className="fixed bottom-0 sm:bottom-auto sm:top-0 right-0 max-h-[92vh] sm:max-h-full h-auto sm:h-full w-full sm:w-[480px] bg-slate-950/95 backdrop-blur-2xl border-t sm:border-t-0 sm:border-l border-slate-800 shadow-2xl text-slate-100 z-[60] flex flex-col rounded-t-3xl sm:rounded-none animate-slide-in"
       >
         {/* モバイル用ドラッグハンドル */}
         <div className="w-12 h-1.5 bg-slate-700/60 rounded-full mx-auto mt-3 sm:hidden" />

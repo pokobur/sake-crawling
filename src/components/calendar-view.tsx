@@ -14,6 +14,8 @@ interface CalendarViewProps {
   setCurrentDate: React.Dispatch<React.SetStateAction<Date>>;
   events: Event[];
   onSelectEvent: (event: Event) => void;
+  selectedDate?: string | null;
+  onSelectDate: (dateStr: string) => void;
 }
 
 const WEEKDAYS = ['月', '火', '水', '木', '金', '土', '日'];
@@ -23,6 +25,8 @@ export default function CalendarView({
   setCurrentDate,
   events,
   onSelectEvent,
+  selectedDate = null,
+  onSelectDate,
 }: CalendarViewProps) {
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth(); // 0-indexed
@@ -113,6 +117,9 @@ export default function CalendarView({
             <h2 className="text-xl sm:text-2xl font-black tracking-widest text-slate-100 uppercase">
               {year}年 {month + 1}月
             </h2>
+            <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+              日付を押すとその日のイベント一覧を表示します
+            </p>
           </div>
         </div>
 
@@ -165,19 +172,32 @@ export default function CalendarView({
         {calendarDays.map((day) => {
           const dateStr = formatLocalDate(day.date);
           const isToday = dateStr === todayStr;
+          const isSelected = selectedDate === dateStr;
           const dayEvents = getEventsForDate(day.date);
           const isWeekend = day.date.getDay() === 0 || day.date.getDay() === 6;
 
           return (
             <div
               key={day.key}
-              aria-label={`${year}年${month + 1}月${day.date.getDate()}日 ${dayEvents.length}件のイベント`}
-              className={`min-h-[72px] sm:min-h-[82px] p-1.5 sm:p-2 rounded-2xl border flex flex-col transition-all duration-200 ${
-                day.isCurrentMonth
+              role="button"
+              tabIndex={0}
+              onClick={() => onSelectDate(dateStr)}
+              onKeyDown={(e) => {
+                if (e.target !== e.currentTarget) return;
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onSelectDate(dateStr);
+                }
+              }}
+              aria-label={`${day.date.getFullYear()}年${day.date.getMonth() + 1}月${day.date.getDate()}日 ${dayEvents.length}件のイベント一覧を表示`}
+              className={`min-h-[72px] sm:min-h-[82px] p-1.5 sm:p-2 rounded-2xl border flex flex-col transition-all duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-400/70 ${
+                isSelected
+                  ? 'bg-amber-500/15 border-amber-400 ring-2 ring-amber-400/70 shadow-lg shadow-amber-500/15'
+                  : day.isCurrentMonth
                   ? isToday
-                    ? 'bg-slate-900/90 border-amber-400/80 shadow-lg shadow-amber-500/10 ring-1 ring-amber-400/50'
-                    : 'bg-slate-900/30 border-slate-800/80 hover:bg-slate-900/60 hover:border-slate-700/80'
-                  : 'bg-slate-950/20 border-slate-900/30 opacity-25 text-slate-600'
+                    ? 'bg-slate-900/90 border-amber-400/80 shadow-lg shadow-amber-500/10 ring-1 ring-amber-400/50 hover:bg-slate-900'
+                    : 'bg-slate-900/30 border-slate-800/80 hover:bg-slate-900/60 hover:border-amber-500/40'
+                  : 'bg-slate-950/20 border-slate-900/30 opacity-35 hover:opacity-60 text-slate-600'
               }`}
             >
               {/* 日付番号とマーク */}
@@ -219,7 +239,10 @@ export default function CalendarView({
                   return (
                     <button
                       key={event.id}
-                      onClick={() => onSelectEvent(event)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectEvent(event);
+                      }}
                       className={`w-full text-left text-[10px] sm:text-[11px] font-semibold px-2 py-1 rounded-lg border flex items-center space-x-1.5 transition-all select-none truncate shadow-xs ${genreConfig.calendar.bg} ${genreConfig.calendar.text} hover:scale-[1.02] active:scale-95`}
                       title={`${event.title} (${event.location_name})`}
                     >
@@ -229,8 +252,8 @@ export default function CalendarView({
                   );
                 })}
                 {dayEvents.length > 3 && (
-                  <div className="text-[9px] text-slate-400 text-center font-bold bg-slate-800/40 rounded py-0.5 mt-0.5">
-                    他 {dayEvents.length - 3} 件
+                  <div className="text-[9px] text-amber-300 text-center font-bold bg-amber-500/10 border border-amber-500/20 rounded py-0.5 mt-0.5 hover:bg-amber-500/20 transition-colors">
+                    他 {dayEvents.length - 3} 件を表示
                   </div>
                 )}
               </div>

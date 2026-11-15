@@ -10,6 +10,8 @@ import FilterSidebar from '../components/filter-sidebar';
 import CalendarView from '../components/calendar-view';
 import ListView from '../components/list-view';
 import EventDetail from '../components/event-detail';
+import DayEventsPanel from '../components/day-events-panel';
+import { parseLocalDate } from '../utils/date';
 
 // Leaflet を含む MapView は SSR 回避のため遅延読み込み
 const MapView = lazy(() => import('../components/map-view'));
@@ -24,9 +26,31 @@ export default function Home() {
 
   // 表示・選択状態
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
+  const [selectedDateStr, setSelectedDateStr] = useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('calendar');
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
+
+  // 日付選択時に別月ならカレンダー表示月も同期する
+  const handleSelectDate = (dateStr: string) => {
+    setSelectedDateStr(dateStr);
+    const parsed = parseLocalDate(dateStr);
+    if (
+      parsed &&
+      (parsed.getFullYear() !== currentDate.getFullYear() ||
+        parsed.getMonth() !== currentDate.getMonth())
+    ) {
+      setCurrentDate(new Date(parsed.getFullYear(), parsed.getMonth(), 1));
+    }
+  };
+
+  // 表示モード変更時に日付選択パネルを閉じる
+  const handleViewModeChange = (mode: ViewMode) => {
+    if (mode !== 'calendar') {
+      setSelectedDateStr(null);
+    }
+    setViewMode(mode);
+  };
 
   // お気に入り管理
   const { favoriteIds, toggleFavorite, isFavorite } = useFavorites();
@@ -98,7 +122,7 @@ export default function Home() {
         <Header
           isMock={isMock}
           viewMode={viewMode}
-          onViewModeChange={setViewMode}
+          onViewModeChange={handleViewModeChange}
           onOpenMobileFilter={() => setIsMobileFilterOpen(true)}
           dateFilter={dateFilter}
           onDateFilterChange={setDateFilter}
@@ -137,6 +161,8 @@ export default function Home() {
                   setCurrentDate={setCurrentDate}
                   events={filteredEvents}
                   onSelectEvent={setSelectedEvent}
+                  selectedDate={selectedDateStr}
+                  onSelectDate={handleSelectDate}
                 />
               )}
 
@@ -174,6 +200,20 @@ export default function Home() {
           )}
         </main>
       </div>
+
+      {/* 選択した日付のイベント一覧パネル */}
+      {viewMode === 'calendar' && (
+        <DayEventsPanel
+          selectedDate={selectedDateStr}
+          events={filteredEvents}
+          onClose={() => setSelectedDateStr(null)}
+          onChangeDate={handleSelectDate}
+          onSelectEvent={setSelectedEvent}
+          isFavorite={isFavorite}
+          onToggleFavorite={toggleFavorite}
+          isDetailOpen={Boolean(selectedEvent)}
+        />
+      )}
 
       {/* 詳細スライドオーバー / ボトムシート */}
       <EventDetail
