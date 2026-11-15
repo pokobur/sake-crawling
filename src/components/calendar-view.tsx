@@ -106,7 +106,7 @@ export default function CalendarView({
   const todayStr = formatLocalDate(new Date());
 
   return (
-    <div className="bg-slate-950/60 backdrop-blur-xl rounded-3xl border border-slate-800/80 p-5 sm:p-6 flex flex-col h-full shadow-2xl">
+    <div className="bg-slate-950/60 backdrop-blur-xl rounded-3xl border border-slate-800/80 p-3.5 sm:p-6 flex flex-col h-full shadow-2xl">
       {/* カレンダーヘッダー */}
       <div className="flex flex-col sm:flex-row justify-between items-center mb-5 gap-3">
         <div className="flex items-center space-x-3">
@@ -168,7 +168,7 @@ export default function CalendarView({
       </div>
 
       {/* 日付グリッド (42マス) */}
-      <div className="grid grid-cols-7 gap-1 sm:gap-2 flex-1 min-h-[460px]">
+      <div className="grid grid-cols-7 gap-1 sm:gap-2 flex-1 min-h-[370px] sm:min-h-[460px]">
         {calendarDays.map((day) => {
           const dateStr = formatLocalDate(day.date);
           const isToday = dateStr === todayStr;
@@ -190,7 +190,7 @@ export default function CalendarView({
                 }
               }}
               aria-label={`${day.date.getFullYear()}年${day.date.getMonth() + 1}月${day.date.getDate()}日 ${dayEvents.length}件のイベント一覧を表示`}
-              className={`min-h-[72px] sm:min-h-[82px] p-1.5 sm:p-2 rounded-2xl border flex flex-col transition-all duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-400/70 ${
+              className={`min-h-[58px] sm:min-h-[82px] p-1 sm:p-2 rounded-xl sm:rounded-2xl border flex flex-col transition-all duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-400/70 ${
                 isSelected
                   ? 'bg-amber-500/15 border-amber-400 ring-2 ring-amber-400/70 shadow-lg shadow-amber-500/15'
                   : day.isCurrentMonth
@@ -201,7 +201,7 @@ export default function CalendarView({
               }`}
             >
               {/* 日付番号とマーク */}
-              <div className="flex justify-between items-center mb-1.5">
+              <div className="flex justify-center sm:justify-between items-center mb-1 sm:mb-1.5">
                 <span
                   className={`text-xs font-black w-6 h-6 flex items-center justify-center rounded-lg ${
                     isToday
@@ -223,15 +223,19 @@ export default function CalendarView({
                     TODAY
                   </span>
                 )}
-
-                {/* イベントありドット（モバイル表示） */}
-                {dayEvents.length > 0 && !isToday && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 sm:hidden" />
-                )}
               </div>
 
-              {/* イベントリスト */}
-              <div className="flex-1 flex flex-col gap-1 overflow-y-auto max-h-[72px] sm:max-h-none scrollbar-none">
+              {/* モバイル表示: イベント件数のみ表示 */}
+              {dayEvents.length > 0 && (
+                <div className="sm:hidden flex-1 flex items-center justify-center">
+                  <span className="inline-flex items-center justify-center text-[10px] font-extrabold text-amber-300 bg-amber-500/15 border border-amber-500/35 rounded-md px-1.5 py-0.5 leading-none whitespace-nowrap">
+                    {dayEvents.length}件
+                  </span>
+                </div>
+              )}
+
+              {/* デスクトップ表示: イベントリスト */}
+              <div className="hidden sm:flex flex-1 flex-col gap-1 overflow-y-auto scrollbar-none">
                 {dayEvents.slice(0, 3).map((event) => {
                   const primaryGenre = event.genre[0] || 'その他';
                   const genreConfig = getGenreConfig(primaryGenre);
