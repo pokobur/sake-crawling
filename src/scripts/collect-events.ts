@@ -446,21 +446,21 @@ async function main() {
   const timeoutTokyoCandidates = await scrapeTimeoutTokyo();
 
   const allCandidates = [
-    ...prTimesCandidates.map((c) => ({ ...c, sourceType: 'prtimes' as const })),
-    ...beerGirlCandidates.map((c) => ({ ...c, sourceType: 'beergirl' as const, description: '' })),
-    ...enjoyTokyoCandidates.map((c) => ({ ...c, sourceType: 'enjoytokyo' as const, description: '' })),
-    ...timeoutTokyoCandidates.map((c) => ({ ...c, sourceType: 'timeout' as const, description: '' })),
+    ...prTimesCandidates.slice(0, 5).map((c) => ({ ...c, sourceType: 'prtimes' as const })),
+    ...beerGirlCandidates.slice(0, 5).map((c) => ({ ...c, sourceType: 'beergirl' as const, description: '' })),
+    ...enjoyTokyoCandidates.slice(0, 5).map((c) => ({ ...c, sourceType: 'enjoytokyo' as const, description: '' })),
+    ...timeoutTokyoCandidates.slice(0, 5).map((c) => ({ ...c, sourceType: 'timeout' as const, description: '' })),
   ];
 
-  const maxToProcess = 10;
-  console.log(`[Pipeline] 抽出された全候補 ${allCandidates.length} 件のうち、最大 ${maxToProcess} 件を処理します。`);
+  const todayStr = formatLocalDate(new Date());
+  console.log(`[Pipeline] 各ソースから選定した候補 ${allCandidates.length} 件を処理します。`);
 
   let addedCount = 0;
 
-  for (const candidate of allCandidates.slice(0, maxToProcess)) {
+  for (const candidate of allCandidates) {
     // 既存イベントに同じURLがすでにあればスキップ
-    const exists = currentEvents.some((e) => e.official_url === candidate.url);
-    if (exists) {
+    const existsByUrl = currentEvents.some((e) => e.official_url === candidate.url);
+    if (existsByUrl) {
       console.log(`ℹ️ すでに登録済みのイベントのためスキップ: ${candidate.title}`);
       continue;
     }
@@ -479,7 +479,7 @@ async function main() {
       eventData = {
         id: `mock-${Date.now()}`,
         title: cleanString(candidate.title),
-        start_date: formatLocalDate(new Date()),
+        start_date: todayStr,
         end_date: formatLocalDate(new Date(Date.now() + 24 * 60 * 60 * 1000)),
         location_name: '都内イベント会場',
         address: '東京都千代田区',
@@ -493,6 +493,19 @@ async function main() {
     }
 
     if (eventData) {
+      if (eventData.end_date < todayStr) {
+        console.log(`ℹ️ 終了済みの過去イベントのためスキップ: ${eventData.title} (${eventData.end_date})`);
+        continue;
+      }
+      const existsDuplicate = currentEvents.some(
+        (e) =>
+          e.official_url === eventData!.official_url ||
+          (e.title === eventData!.title && e.start_date === eventData!.start_date)
+      );
+      if (existsDuplicate) {
+        console.log(`ℹ️ 重複イベントのためスキップ: ${eventData.title}`);
+        continue;
+      }
       console.log(`✨ 新規イベントを追加: ${eventData.title} (${eventData.start_date})`);
       currentEvents.push(eventData);
       addedCount++;

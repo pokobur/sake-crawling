@@ -1,90 +1,86 @@
 [
   {
-    "id": "event-1",
-    "title": "日比谷オクトーバーフェスト 2026 Summer",
-    "start_date": "2026-10-13",
-    "end_date": "2026-10-23",
-    "location_name": "日比谷公園 噴水広場",
-    "address": "東京都千代田区日比谷公園１−６",
-    "genre": [
-      "ビール"
-    ],
-    "area": "城山",
-    "official_url": "https://oktober-fest.jp/hibiya/",
-    "description": "本場ドイツのビールとソーセージが楽しめる、都内最大級のオクトーバーフェスト。爽やかな青空の下で極上の1杯を。"
-  },
-  {
-    "id": "event-2",
-    "title": "日本酒天国 in 池袋 2026",
-    "start_date": "2026-10-16",
-    "end_date": "2026-10-16",
-    "location_name": "池袋サンシャインシティ 展示ホールB",
-    "address": "東京都豊島区東池袋３丁目１−４",
-    "genre": [
-      "日本酒"
-    ],
-    "area": "城北",
-    "official_url": "https://sake-tengoku-ikebukuro.org/",
-    "description": "全国から50以上の蔵元が集結！大人気の銘柄から入手困難な限定酒まで、心ゆくまで試飲が楽しめる日本酒ファンのための祭典。"
-  },
-  {
-    "id": "event-3",
-    "title": "横浜みなとみらい クラフトビールフェスタ",
-    "start_date": "2026-10-19",
-    "end_date": "2026-10-21",
-    "location_name": "臨港パーク",
-    "address": "神奈川県横浜市西区みなとみらい１丁目１−１",
+    "id": "event-1794712385357-vn6ec",
+    "title": "サンクトガーレン TAP ROOM 5周年感謝祭",
+    "start_date": "2026-10-20",
+    "end_date": "2026-11-15",
+    "location_name": "サンクトガーレン TAP ROOM",
+    "address": "神奈川県 厚木市",
     "genre": [
       "ビール"
     ],
     "area": "その他東京近郊",
-    "official_url": "https://mm-craftbeer-festa.com/",
-    "description": "神奈川県の地元マイクロブルワリーを中心に、日本全国から人気のクラフトビールが集結。ステージライブ演奏と共に乾杯！"
+    "official_url": "https://www.sanktgallenbrewery.com/taproom/",
+    "description": "本厚木駅北口のTAP ROOMで5周年感謝祭。最大20種のクラフトビール飲み放題やチーズ食べ放題、フードメニューのグレードアップも。"
   },
   {
-    "id": "event-4",
-    "title": "ウイスキー＆スピリッツ ラヴァーズ TOKYO",
-    "start_date": "2026-10-23",
-    "end_date": "2026-10-24",
-    "location_name": "浅草花やしきホール",
-    "address": "東京都台東区浅草２丁目２８−１",
+    "id": "event-1794712420511-b4us3",
+    "title": "【ビール女子主催】クラフトビール×ネイルのPOPUPイベントを開催！",
+    "start_date": "2026-11-07",
+    "end_date": "2026-11-15",
+    "location_name": "豊島区の雑貨屋兼ビアバー",
+    "address": "",
     "genre": [
-      "ウイスキー",
-      "その他"
+      "ビール"
     ],
-    "area": "城東",
-    "official_url": "https://whisky-lovers-tokyo.jp/",
-    "description": "ジャパニーズウイスキーから海外のレアボトル、ジンやラムなどのクラフトスピリッツまで網羅した、大人のためのテイスティングイベント。"
+    "area": "城北",
+    "official_url": "https://beergirl.net/beernail_e/",
+    "description": "WEBマガジン「ビール女子」が主催するクラフトビールとネイルのコラボイベント。3つのブルワリーをイメージしたネイルチップの販売やお試しネイル企画を豊島区のビアバーで開催。"
   },
   {
-    "id": "event-5",
-    "title": "クラフトビール列車 2026",
-    "start_date": "2026-10-30",
-    "end_date": "2026-10-30",
-    "location_name": "西武新宿駅（発着）",
-    "address": "東京都新宿区歌舞伎町１丁目３０−１",
+    "id": "event-1794712414442-9mlfn",
+    "title": "第八回桃祭り",
+    "start_date": "2026-11-09",
+    "end_date": "2026-11-15",
+    "location_name": "Craft Beer Server Land 赤坂見附店",
+    "address": "",
     "genre": [
       "ビール"
     ],
     "area": "城西",
-    "official_url": "https://beergirl.net/shima-beertrain_e/",
-    "description": "【ビール女子×志摩醸造コラボ】特別貸切列車で移動しながら、クラフトビール飲み放題と車内でのペアリングおつまみを楽しむプレミアム体験。"
+    "official_url": "https://beergirl.net/peach-beer-fes2026_e/",
+    "description": "甘くとろける桃を使ったクラフトビールイベント。赤坂見附のCraft Beer Server Landで全国37ブルワリーから過去最多46種類の桃ビールが集結。限定桃スイーツも楽しめる。"
   },
   {
-    "id": "event-6",
-    "title": "吉祥寺 秋の立ち飲みバル巡り 2026",
-    "start_date": "2026-11-05",
-    "end_date": "2026-11-08",
-    "location_name": "吉祥寺ハモニカ横丁周辺",
-    "address": "東京都武蔵野市吉祥寺本町１丁目１",
+    "id": "event-1794712472400-d4jmz",
+    "title": "みなとみらいクリスマスマーケット2026",
+    "start_date": "2026-11-13",
+    "end_date": "2026-12-25",
+    "location_name": "グランモール公園",
+    "address": "",
     "genre": [
-      "日本酒",
-      "ビール",
-      "ワイン",
       "その他"
     ],
     "area": "その他東京近郊",
-    "official_url": "https://kichijoji-bar-crawl.net/",
-    "description": "吉祥寺の人気飲食店をはしご酒！参加バッジを購入すると、各店自慢の限定おつまみとお酒のセットがお得に楽しめる街歩きイベント。"
+    "official_url": "https://www.enjoytokyo.jp/event/list/regn01/cat08/",
+    "description": "入場待ちなしで、ファミリーやペット連れでも楽しめる12のヒュッテがグランモール公園に登場！"
+  },
+  {
+    "id": "event-1794712397647-pfhvr",
+    "title": "キリングッドエール『GOOD DAYバッグ』ポップアップ",
+    "start_date": "2026-11-20",
+    "end_date": "2026-11-23",
+    "location_name": "渋谷モディ",
+    "address": "東京都渋谷区神南1丁目21-1",
+    "genre": [
+      "ビール"
+    ],
+    "area": "城西",
+    "official_url": "https://www.kirin.co.jp/alcohol/beer/goodale/",
+    "description": "「キリングッドエール」の新プロジェクト体験型ポップアップイベント。綾瀬はるかさんら4人の声が流れる特別な自販機で、GOOD DAYバッグとビールの引換カードを受け取れます。渋谷モディにて開催。"
+  },
+  {
+    "id": "event-1794712444527-ejqbm",
+    "title": "世界のお酒フェス",
+    "start_date": "2026-11-20",
+    "end_date": "2026-11-23",
+    "location_name": "シンボルプロムナード公園 セントラル広場",
+    "address": "",
+    "genre": [
+      "その他"
+    ],
+    "area": "臨海部",
+    "official_url": "https://www.enjoytokyo.jp/event/list/regn01/",
+    "description": "世界各国のお酒とグルメを旅するように楽しむイベント「世界のお酒フェス」がお台場で開催されます。"
   }
 ]
